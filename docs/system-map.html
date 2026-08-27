@@ -1,0 +1,411 @@
+<title>ARC-AGI-3 Agent — System Map</title>
+<style>
+  :root{
+    --ground:#0F141A;
+    --panel:#141B22;
+    --panel-2:#182029;
+    --line:#33424E;
+    --line-soft:#212C36;
+    --ink:#DCE4EA;
+    --muted:#8496A4;
+    --signal:#E8A33D;
+    --signal-soft:rgba(232,163,61,.12);
+    --status-fixed:#6FCF97;
+    --status-running:#5FB3D9;
+    --status-open:#E0777A;
+
+    --font-display:"Iowan Old Style","Palatino Linotype",Palatino,"URW Palladio L","Book Antiqua",Georgia,serif;
+    --font-mono:ui-monospace,"SF Mono","Cascadia Code","Roboto Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(ellipse at top, #131A21 0%, var(--ground) 55%);
+    color:var(--ink);
+    font-family:var(--font-display);
+    font-size:16px;
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{ background:var(--signal-soft); color:var(--ink); }
+  a{ color:var(--signal); }
+  h1,h2,h3,h4{ font-family:var(--font-display); font-weight:600; margin:0; text-wrap:balance; }
+  .mono{ font-family:var(--font-mono); }
+
+  .page{
+    max-width:980px;
+    margin:0 auto;
+    padding:56px 28px 96px;
+    display:flex;
+    flex-direction:column;
+    gap:56px;
+  }
+
+  /* ---------- masthead ---------- */
+  .masthead{ display:flex; flex-direction:column; gap:10px; border-bottom:1px solid var(--line-soft); padding-bottom:32px; }
+  .eyebrow{
+    font-family:var(--font-mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--muted); display:flex; align-items:center; gap:10px;
+  }
+  .eyebrow .dot{ width:6px; height:6px; border-radius:50%; background:var(--status-running); box-shadow:0 0 0 3px rgba(95,179,217,.15); }
+  h1.title{ font-size:clamp(28px,4vw,40px); letter-spacing:-.01em; }
+  h1.title em{ font-style:italic; color:var(--signal); }
+  .subtitle{ color:var(--muted); font-size:16px; max-width:62ch; }
+  .meta-row{ display:flex; gap:20px; flex-wrap:wrap; margin-top:6px; font-family:var(--font-mono); font-size:12px; color:var(--muted); }
+  .meta-row b{ color:var(--ink); font-weight:600; }
+
+  /* ---------- section shell ---------- */
+  section{ display:flex; flex-direction:column; gap:18px; }
+  .section-head{ display:flex; align-items:baseline; gap:14px; justify-content:space-between; flex-wrap:wrap; }
+  .section-head h2{ font-size:21px; }
+  .section-head .hint{ font-family:var(--font-mono); font-size:11.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; }
+
+  /* ---------- guardrails ---------- */
+  .guardrails{
+    display:grid; grid-template-columns:repeat(3,1fr); gap:1px;
+    background:var(--line-soft); border:1px solid var(--line-soft); border-radius:3px; overflow:hidden;
+  }
+  .guardrail{ background:var(--panel); padding:20px 22px; display:flex; flex-direction:column; gap:8px; }
+  .guardrail .num{ font-family:var(--font-mono); font-size:11px; color:var(--signal); letter-spacing:.08em; }
+  .guardrail h3{ font-size:16px; }
+  .guardrail p{ margin:0; font-size:14px; color:var(--muted); }
+
+  /* ---------- diagram ---------- */
+  .diagram-frame{
+    border:1px solid var(--line); border-radius:4px; padding:36px 28px;
+    background-image:
+      linear-gradient(var(--line-soft) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line-soft) 1px, transparent 1px);
+    background-size:28px 28px;
+    background-color:var(--panel);
+    overflow-x:auto;
+  }
+  .diagram{ min-width:640px; display:flex; flex-direction:column; align-items:center; }
+
+  .node{
+    border:1px solid var(--line); background:var(--panel-2); border-radius:3px;
+    padding:14px 20px; width:100%; text-align:left; position:relative;
+  }
+  .node.env{ text-align:center; max-width:360px; }
+  .node.target{ border-style:dashed; }
+  .node h4{ font-size:15.5px; display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .node h4 .tag{ font-family:var(--font-mono); font-size:10px; color:var(--muted); font-weight:400; }
+  .node .desc{ font-size:13.5px; color:var(--muted); margin-top:6px; }
+  .node .io{ font-family:var(--font-mono); font-size:11px; color:var(--signal); margin-top:8px; line-height:1.6; }
+  .node .io span.k{ color:var(--muted); }
+
+  .arrow{ width:1px; height:26px; background:var(--line); position:relative; }
+  .arrow::after{ content:''; position:absolute; bottom:-1px; left:50%; transform:translateX(-50%);
+    border:5px solid transparent; border-top-color:var(--line); }
+
+  .trainable{ position:relative; width:100%; padding-left:26px; }
+  .trainable::before{
+    content:''; position:absolute; left:0; top:6px; bottom:6px; width:0;
+    border-left:1px dashed var(--signal);
+  }
+  .trainable::after{
+    content:'∇ grad'; position:absolute; left:-2px; top:50%; transform:translate(-100%,-50%) rotate(180deg);
+    writing-mode:vertical-rl; font-family:var(--font-mono); font-size:10px; letter-spacing:.1em;
+    color:var(--signal); padding-right:6px;
+  }
+
+  .cols{ display:grid; grid-template-columns:1fr 1fr; gap:22px; width:100%; }
+  .col{ display:flex; flex-direction:column; gap:14px; }
+  .col-head{ font-family:var(--font-mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); text-align:center; }
+
+  .full{ width:100%; }
+  .merge-note{ font-family:var(--font-mono); font-size:11px; color:var(--muted); text-align:center; margin-top:4px; }
+
+  @media (max-width:640px){ .cols{ grid-template-columns:1fr; } }
+
+  /* ---------- tables ---------- */
+  .panels{ display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+  @media (max-width:720px){ .panels{ grid-template-columns:1fr; } }
+  .panel{ border:1px solid var(--line); border-radius:3px; background:var(--panel); padding:20px 22px; }
+  .panel h3{ font-size:15px; margin-bottom:12px; }
+  table{ width:100%; border-collapse:collapse; font-family:var(--font-mono); font-size:12.5px; font-variant-numeric:tabular-nums; }
+  table caption{ text-align:left; }
+  td,th{ padding:7px 4px; border-bottom:1px solid var(--line-soft); text-align:left; color:var(--ink); }
+  th{ color:var(--muted); font-weight:400; text-transform:uppercase; font-size:10.5px; letter-spacing:.06em; }
+  td.num{ text-align:right; color:var(--signal); }
+  tr:last-child td{ border-bottom:none; }
+  .why{ display:block; color:var(--muted); font-size:11px; margin-top:2px; }
+
+  /* ---------- timeline ---------- */
+  .timeline{ display:flex; flex-direction:column; }
+  .tl-item{ display:grid; grid-template-columns:34px 1fr; gap:16px; padding:16px 0; border-bottom:1px solid var(--line-soft); }
+  .tl-item:last-child{ border-bottom:none; }
+  .tl-num{ font-family:var(--font-mono); font-size:12px; color:var(--muted); padding-top:2px; }
+  .tl-body h4{ font-size:15px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .pill{ font-family:var(--font-mono); font-size:10px; letter-spacing:.05em; padding:2px 7px; border-radius:20px; text-transform:uppercase; }
+  .pill.fixed{ color:var(--status-fixed); border:1px solid rgba(111,207,151,.35); background:rgba(111,207,151,.08); }
+  .pill.open{ color:var(--status-open); border:1px solid rgba(224,119,122,.35); background:rgba(224,119,122,.08); }
+  .tl-body p{ margin:6px 0 0; font-size:14px; color:var(--muted); max-width:70ch; }
+  .tl-body .cause{ font-family:var(--font-mono); font-size:12px; color:var(--ink); margin-top:6px; }
+  .tl-body .cause span{ color:var(--muted); }
+
+  /* ---------- experiment table ---------- */
+  .exp-table{ width:100%; border-collapse:collapse; font-family:var(--font-mono); font-size:12.5px; }
+  .exp-table th{ text-align:left; color:var(--muted); font-weight:400; text-transform:uppercase; font-size:10.5px; letter-spacing:.06em; padding:8px 10px; border-bottom:1px solid var(--line); }
+  .exp-table td{ padding:9px 10px; border-bottom:1px solid var(--line-soft); }
+  .status{ display:inline-flex; align-items:center; gap:6px; }
+  .status .dot{ width:6px; height:6px; border-radius:50%; }
+  .status.running .dot{ background:var(--status-running); box-shadow:0 0 0 3px rgba(95,179,217,.15); }
+
+  footer{ border-top:1px solid var(--line-soft); padding-top:24px; font-size:13px; color:var(--muted); display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px; }
+  footer .mono{ font-size:12px; }
+</style>
+
+<div class="page">
+
+  <div class="masthead">
+    <div class="eyebrow"><span class="dot"></span> system map — arc-agi-3 kaggle agent</div>
+    <h1 class="title">Eyes <em>→</em> Brain <em>→</em> Intuition</h1>
+    <p class="subtitle">Reference schematic of the current pipeline — what each block does, how signals connect,
+      what's already broken-and-fixed, and what's still an open question. Kept in sync by hand; the notebook is
+      the source of truth if this ever drifts.</p>
+    <div class="meta-row">
+      <span><b>Game (dev)</b> ls20 · offline</span>
+      <span><b>Params</b> 142,504 trainable</span>
+      <span><b>Status</b> 4-way ablation running (H1–H4)</span>
+    </div>
+  </div>
+
+  <section>
+    <div class="section-head"><h2>Guardrails</h2><span class="hint">non-negotiable, checked before every change</span></div>
+    <div class="guardrails">
+      <div class="guardrail">
+        <span class="num">01</span>
+        <h3>No per-game reward shaping</h3>
+        <p>Reward is only Δlevels_completed, WIN/GAME_OVER, and a step penalty. The curiosity bonus uses the
+          model's own prediction error, never pixel/color heuristics. The agent has to learn the game, not be told it.</p>
+      </div>
+      <div class="guardrail">
+        <span class="num">02</span>
+        <h3>From-scratch, everywhere</h3>
+        <p>No pretrained vision backbone (DINOv3 rejected — domain + license mismatch), no pretrained LLM in
+          Brain. Every weight in this diagram starts random and is trained on the 25 offline games.</p>
+      </div>
+      <div class="guardrail">
+        <span class="num">03</span>
+        <h3>Latent queries, not text prompts</h3>
+        <p>Brain's 4 "queries" are learned vectors, not tokenized language — there's no pretrained language
+          prior here for a text prompt to exploit. Same mechanism, no LLM dependency.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><h2>Pipeline</h2><span class="hint">one forward pass, one env chunk, one update</span></div>
+    <div class="diagram-frame">
+      <div class="diagram">
+
+        <div class="node env">
+          <h4>Environment <span class="tag">Arcade / ls20</span></h4>
+          <div class="desc">64×64 grid, values 0–15, offline mode</div>
+        </div>
+        <div class="arrow"></div>
+        <div class="io" style="margin-bottom:8px;">frame → <span style="color:var(--signal)">(1,1,64,64)</span></div>
+
+        <div class="trainable">
+        <div class="cols">
+          <div class="col">
+            <div class="col-head">perception + action</div>
+
+            <div class="node">
+              <h4>Eyes <span class="tag">RoPE-ViT ×1</span></h4>
+              <div class="desc">4×4 patches (Conv2d) → 256 tokens, 2D axial RoPE attention, mean-pooled</div>
+              <div class="io"><span class="k">out</span> z → (1,16)</div>
+            </div>
+            <div class="arrow"></div>
+
+            <div class="node">
+              <h4>Brain <span class="tag">Transformer ×1</span></h4>
+              <div class="desc">z + 4 learned query vectors → encoder → pooled → action head</div>
+              <div class="io"><span class="k">out</span> logits → (4,6) &nbsp;<span class="k">t_horizon×actions</span></div>
+            </div>
+            <div class="arrow"></div>
+
+            <div class="node">
+              <h4>Action selection</h4>
+              <div class="desc">mask (step-0 legality only) → sample → illegal-action fallback, log_prob recomputed to match what's actually executed</div>
+              <div class="io"><span class="k">out</span> action_indices → (4,)</div>
+            </div>
+            <div class="arrow"></div>
+
+            <div class="node">
+              <h4>env.step() ×4</h4>
+              <div class="desc">executes the chunk, one real frame per step</div>
+              <div class="io"><span class="k">out</span> real_frames, extrinsic_reward</div>
+            </div>
+          </div>
+
+          <div class="col">
+            <div class="col-head">world model</div>
+
+            <div class="node target">
+              <h4>Target Eyes <span class="tag">EMA, frozen</span></h4>
+              <div class="desc">copy of Eyes, updated by momentum (τ=0.99) after every optimizer step, no gradient</div>
+              <div class="io"><span class="k">in</span> real_frames &nbsp;<span class="k">out</span> z_target → (4,16)</div>
+            </div>
+
+            <div style="height:26px"></div>
+
+            <div class="node">
+              <h4>Intuition <span class="tag">Transformer ×1</span></h4>
+              <div class="desc">z + action_indices (action embed + step embed) → encoder → predicted latents</div>
+              <div class="io"><span class="k">in</span> z, action_indices &nbsp;<span class="k">out</span> ẑ_pred → (4,16)</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="arrow full" style="margin:0 auto;"></div>
+
+        <div class="node full">
+          <h4>Reward &amp; curiosity</h4>
+          <div class="desc">total_reward = extrinsic_reward + curiosity_coef · mean_squared_error(ẑ_pred, z_target).
+            Same surprise term also becomes jepa_loss below — used once to shape reward, once to train the world model.
+            Self-annealing: as Intuition learns a region, its own error there drops.</div>
+        </div>
+        <div class="arrow" style="margin:0 auto;"></div>
+
+        <div class="node full">
+          <h4>Loss</h4>
+          <div class="desc mono">loss = grpo_loss + jepa_weight·jepa_loss − entropy_coef·entropy</div>
+          <div class="desc" style="margin-top:8px;">grpo_loss: −advantage·Σlog_prob, advantage = group-relative z-score of total_reward across the group.
+            jepa_loss: MSE(ẑ_pred, z_target). entropy: mean spread of Brain's action distribution.</div>
+        </div>
+        <div class="arrow" style="margin:0 auto;"></div>
+
+        <div class="node full">
+          <h4>Optimizer</h4>
+          <div class="desc">backward → clip_grad_norm_(max_norm=1.0) → Adam.step() → Target Eyes EMA update</div>
+        </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <div class="panels">
+    <div class="panel">
+      <h3>Parameters</h3>
+      <table>
+        <tr><th>module</th><th style="text-align:right">count</th></tr>
+        <tr><td>eyes</td><td class="num">3,824</td></tr>
+        <tr><td>brain</td><td class="num">69,496</td></tr>
+        <tr><td>intuition</td><td class="num">69,184</td></tr>
+        <tr><td>target_eyes <span class="why">(frozen, excluded)</span></td><td class="num">3,824</td></tr>
+        <tr><td><b>total trainable</b></td><td class="num"><b>142,504</b></td></tr>
+      </table>
+    </div>
+    <div class="panel">
+      <h3>Current hyperparameters</h3>
+      <table>
+        <tr><th>name</th><th style="text-align:right">value</th></tr>
+        <tr><td>group_size <span class="why">episodes per GRPO group</span></td><td class="num">24</td></tr>
+        <tr><td>t_horizon <span class="why">open-loop actions/call</span></td><td class="num">4</td></tr>
+        <tr><td>max_chunks <span class="why">chunks/episode</span></td><td class="num">12</td></tr>
+        <tr><td>entropy_coef <span class="why">exploration bonus</span></td><td class="num">0.001</td></tr>
+        <tr><td>curiosity_coef <span class="why">intrinsic reward weight</span></td><td class="num">0.005</td></tr>
+        <tr><td>grad clip <span class="why">max_norm</span></td><td class="num">1.0</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <section>
+    <div class="section-head"><h2>Fix log</h2><span class="hint">chronological — order matters, each fix reacted to the previous run</span></div>
+    <div class="timeline">
+
+      <div class="tl-item">
+        <div class="tl-num">01</div>
+        <div class="tl-body">
+          <h4>Policy collapse <span class="pill fixed">fixed</span></h4>
+          <p>First joint run: reward climbed steadily then collapsed hard around step 200–230 and never recovered.</p>
+          <div class="cause"><span>cause →</span> no entropy term; a near-deterministic policy has ~zero gradient left to escape a bad update.</div>
+          <div class="cause"><span>fix →</span> added entropy bonus to the loss.</div>
+        </div>
+      </div>
+
+      <div class="tl-item">
+        <div class="tl-num">02</div>
+        <div class="tl-body">
+          <h4>Zero-variance trap <span class="pill fixed">fixed</span></h4>
+          <p>grpo_loss sat at exactly 0.0000 for hundreds of updates straight — every episode in every group scored
+            identically (ran out the step budget, no win, no loss).</p>
+          <div class="cause"><span>cause →</span> GRPO's advantage needs reward variance <i>within a group</i>; identical outcomes ⇒ advantage = 0 ⇒ no gradient.</div>
+          <div class="cause"><span>fix →</span> larger group_size (8→24) + intrinsic curiosity bonus, to make some variance likelier.</div>
+        </div>
+      </div>
+
+      <div class="tl-item">
+        <div class="tl-num">03</div>
+        <div class="tl-body">
+          <h4>grpo_loss explosion <span class="pill fixed">fixed</span></h4>
+          <p>grpo_loss ran from −64 to −1688 over 490 steps while mean reward stayed completely flat.</p>
+          <div class="cause"><span>cause →</span> only step-0 action legality is masked; as the policy narrows, its probability for a later forced-legal fallback action → 0, so log_prob → −∞.</div>
+          <div class="cause"><span>fix →</span> <span class="mono">clip_grad_norm_(max_norm=1.0)</span> as a trust-region safety net.</div>
+        </div>
+      </div>
+
+      <div class="tl-item">
+        <div class="tl-num">04</div>
+        <div class="tl-body">
+          <h4>Curiosity dominated the reward <span class="pill fixed">fixed</span></h4>
+          <p>With curiosity_coef=0.05, "best episode" reward hit 4.8 — but the replayed frame showed no real task
+            progress at all, just a novelty-chasing trajectory.</p>
+          <div class="cause"><span>cause →</span> intrinsic bonus (~5/episode early on) dwarfed the sparse task signal (max ~1); ranking on the mixed total picked novelty over task success.</div>
+          <div class="cause"><span>fix →</span> tracked extrinsic (task) reward separately from total; best_run now ranks on extrinsic only; curiosity_coef lowered to 0.005.</div>
+        </div>
+      </div>
+
+      <div class="tl-item">
+        <div class="tl-num">05</div>
+        <div class="tl-body">
+          <h4>Does curiosity actually matter, or was it just a bigger budget? <span class="pill open">open</span></h4>
+          <p>With curiosity_coef=0 and epochs capped at 50 (1200 episodes), no genuine level completion was observed —
+            earlier runs that did find one all used epochs=500 (4000+ episodes). Confounded variable, not yet isolated.</p>
+          <div class="cause"><span>test →</span> 4-way seeded ablation crossing epochs×curiosity_coef, see below.</div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><h2>Running now</h2><span class="hint"><span class="mono">src/train.py</span> — 4 background processes, same seed</span></div>
+    <div class="panel" style="overflow-x:auto;">
+      <table class="exp-table">
+        <tr><th>run</th><th>epochs</th><th>group_size</th><th>curiosity_coef</th><th>tests</th><th>status</th></tr>
+        <tr>
+          <td>H1</td><td>500</td><td>24</td><td>0.0</td>
+          <td>does the full episode budget alone recover a win, no curiosity?</td>
+          <td class="status running"><span class="dot"></span>running</td>
+        </tr>
+        <tr>
+          <td>H2</td><td>500</td><td>24</td><td>0.005</td>
+          <td>full budget + curiosity — faster/more wins than H1?</td>
+          <td class="status running"><span class="dot"></span>running</td>
+        </tr>
+        <tr>
+          <td>H3</td><td>50</td><td>24</td><td>0.005</td>
+          <td>current short config, with curiosity — reproduces the recent runs?</td>
+          <td class="status running"><span class="dot"></span>running</td>
+        </tr>
+        <tr>
+          <td>H4</td><td>50</td><td>24</td><td>0.0</td>
+          <td>current short config, no curiosity — reproduce the "no win" report?</td>
+          <td class="status running"><span class="dot"></span>running</td>
+        </tr>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <span>Source of truth: <span class="mono">ARCHITECTURE.md</span> · <span class="mono">DESIGN_LOG.md</span> · <span class="mono">TODO.md</span> · <span class="mono">notebooks/vision_encoder.ipynb</span></span>
+    <span class="mono">generated 2026-08-16</span>
+  </footer>
+
+</div>

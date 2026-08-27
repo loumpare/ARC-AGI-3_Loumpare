@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+data/
+kaggle.json
+RULES.md
+*.egg-info/
+.env
+checkpoints/
+results/
+.claude/
