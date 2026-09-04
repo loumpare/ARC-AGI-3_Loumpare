@@ -1,0 +1,62 @@
+/bin/sh: 1: /home/lavolpe/Bureau/Kaggle/ARC-AGI-3/notebooks/submission_kernel_tools/resubmit_20260902.sh: Permission denied
+=== 2026-09-02T10:20:34+02:00 : resubmission run starting ===
+--- current submissions (before) ---
+     ref  fileName            date                        description                                                                                                                                                                                                  status                     publicScore  privateScore  
+--------  ------------------  --------------------------  -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------  -------------------------  -----------  ------------  
+55944612  submission.parquet  2026-09-01 17:04:58.330000  ToolsAgent: code-grounded self/wall/pathfinding via matrix diffing + Qwen2.5-7B (local GGUF, CPU) for goal selection only -- completed level 1 of ls20 locally in 5/5 test runs, no LLM used for perception  SubmissionStatus.ERROR                                
+55914294  submission.parquet  2026-08-31 11:29:33.893000  First real trained-agent submission (Eyes+Brain, GRPO+PPO-clip+Go-Explore archive) -- validates full pipeline end-to-end, no wins found locally on ls20                                                      SubmissionStatus.COMPLETE  0.09                       
+--- Phase A: rebuild notebook from latest my_agent_tools.py ---
+wrote submission.ipynb
+--- Phase A: kaggle kernels push ---
+Kernel version 9 successfully pushed.  Please check progress at https://www.kaggle.com/code/loumitrmas/arc-agi-3-tools-submission
+Pushed kernel version: 9
+--- Phase A: polling kernel status (up to 20 min) ---
+[1] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[2] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[3] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[4] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.COMPLETE"
+--- Phase A passed. Downloading output to sanity-check submission.parquet exists ---
+Output file downloaded to /tmp/resubmit_20260902_output/submission.parquet
+Kernel log downloaded to /tmp/resubmit_20260902_output/arc-agi-3-tools-submission.log 
+--- Phase B: submitting to competition (consumes today's quota) ---
+400 Client Error: Bad Request for url: https://api.kaggle.com/v1/competitions.CompetitionApiService/CreateCodeSubmission
+--- Phase B: polling competition submission status (up to 30 min) ---
+[1]
+     ref  fileName            date                        description                                                                                                                                                                                                  status                     publicScore  privateScore  
+--------  ------------------  --------------------------  -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------  -------------------------  -----------  ------------  
+55944612  submission.parquet  2026-09-01 17:04:58.330000  ToolsAgent: code-grounded self/wall/pathfinding via matrix diffing + Qwen2.5-7B (local GGUF, CPU) for goal selection only -- completed level 1 of ls20 locally in 5/5 test runs, no LLM used for perception  SubmissionStatus.ERROR                                
+55914294  submission.parquet  2026-08-31 11:29:33.893000  First real trained-agent submission (Eyes+Brain, GRPO+PPO-clip+Go-Explore archive) -- validates full pipeline end-to-end, no wins found locally on ls20                                                      SubmissionStatus.COMPLETE  0.09                       
+RESULT: PHASE_B_DONE status=SubmissionStatus.ERROR kernel_version=9
+=== 2026-09-02T10:21:31+02:00 : resubmission run finished ===
+=== 2026-09-02T10:37:15+02:00 : resubmission run starting ===
+--- current submissions (before) ---
+     ref  fileName            date                        description                                                                                                                                                                                                  status                     publicScore  privateScore  
+--------  ------------------  --------------------------  -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------  -------------------------  -----------  ------------  
+55944612  submission.parquet  2026-09-01 17:04:58.330000  ToolsAgent: code-grounded self/wall/pathfinding via matrix diffing + Qwen2.5-7B (local GGUF, CPU) for goal selection only -- completed level 1 of ls20 locally in 5/5 test runs, no LLM used for perception  SubmissionStatus.ERROR                                
+55914294  submission.parquet  2026-08-31 11:29:33.893000  First real trained-agent submission (Eyes+Brain, GRPO+PPO-clip+Go-Explore archive) -- validates full pipeline end-to-end, no wins found locally on ls20                                                      SubmissionStatus.COMPLETE  0.09                       
+Most recent submission ref before this run: 55944612
+--- Phase A: rebuild notebook from latest my_agent_tools.py ---
+wrote submission.ipynb
+--- Phase A: kaggle kernels push ---
+Kernel version 10 successfully pushed.  Please check progress at https://www.kaggle.com/code/loumitrmas/arc-agi-3-tools-submission
+Pushed kernel version: 10
+--- Phase A: polling kernel status (up to 20 min) ---
+[1] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.QUEUED"
+[2] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[3] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[4] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.COMPLETE"
+--- Phase A passed. Downloading output to sanity-check submission.parquet exists ---
+submission.parquet: Skipping, found more recently modified local copy (use --force to force download)
+Kernel log downloaded to /tmp/resubmit_20260902_output/arc-agi-3-tools-submission.log 
+--- Phase B: submitting to competition (consumes today's quota) ---
+0 submissions remaining today.
+--- Phase B: polling competition submission status (up to 30 min) ---
+[1]
+     ref  fileName            date                        description                                                                                                                                                                                                  status                     publicScore  privateScore  
+--------  ------------------  --------------------------  -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------  -------------------------  -----------  ------------  
+55958137  submission.parquet  2026-09-02 08:38:11.093000  ToolsAgent v2: fixed concurrency lock, brain-call cap, re86 character-switch identity confirmation, ls20 exploration-loop regression -- automated resubmission after 2026-09-01 SubmissionStatus.ERROR       SubmissionStatus.PENDING                              
+55944612  submission.parquet  2026-09-01 17:04:58.330000  ToolsAgent: code-grounded self/wall/pathfinding via matrix diffing + Qwen2.5-7B (local GGUF, CPU) for goal selection only -- completed level 1 of ls20 locally in 5/5 test runs, no LLM used for perception  SubmissionStatus.ERROR                                
+55914294  submission.parquet  2026-08-31 11:29:33.893000  First real trained-agent submission (Eyes+Brain, GRPO+PPO-clip+Go-Explore archive) -- validates full pipeline end-to-end, no wins found locally on ls20                                                      SubmissionStatus.COMPLETE  0.09                       
+RESULT: PHASE_B_DONE status=SubmissionStatus.ERROR
+SubmissionStatus.PENDING ref=55958137 kernel_version=10
+=== 2026-09-02T10:38:13+02:00 : resubmission run finished ===

@@ -1,0 +1,16 @@
+{
+  "id": "loumitrmas/arc-agi-3-submission",
+  "title": "ARC AGI 3 Submission",
+  "code_file": "submission.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": "true",
+  "enable_gpu": "false",
+  "enable_tpu": "false",
+  "enable_internet": "false",
+  "machine_shape": "",
+  "dataset_sources": ["loumitrmas/arc-agi-3-submission-brain-v1"],
+  "competition_sources": ["arc-prize-2026-arc-agi-3"],
+  "kernel_sources": [],
+  "model_sources": []
+}

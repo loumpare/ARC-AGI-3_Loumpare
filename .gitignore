@@ -10,3 +10,5 @@ RULES.md
 checkpoints/
 results/
 .claude/
+notebooks/qwen_gguf_model/
+notebooks/qwen_tools_dataset/
