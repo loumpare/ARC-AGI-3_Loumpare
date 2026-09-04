@@ -196,12 +196,19 @@ DIRECT_ACTION_REPEAT = 4  # when the brain suggests trying an action directly (s
                            # ever runs on for the whole 150-action budget -- see
                            # llm_relay_agent_experiments memory.
 
-STUCK_WINDOW = 4  # if the agent takes the SAME action this many turns in a row and self's
-                   # position never changes across any of them, declare it stuck and force a
-                   # replan instead of grinding on. Generic safety net, not tied to any one
-                   # game -- catches whatever the specific desync cause was (BFS plan computed
-                   # against a not-yet-confirmed wall, round-robin fallback modulo-cycling back
-                   # onto a known-blocked direction, etc.) without needing to diagnose which one.
+STUCK_WINDOW = 6      # if self's position stays within STUCK_MAX_DISTINCT_BBOX distinct spots
+                       # across this many consecutive turns, declare it stuck and force a
+                       # replan. Deliberately position-based, NOT action-based (an earlier
+                       # version required the SAME action repeated -- empirically confirmed via
+                       # a 10-game instrumented trace, 2026-09-04, that 8/8 real stuck episodes
+                       # on ls20 were multi-action ping-pong/cycle patterns, none were a single
+                       # action repeated, so that version caught ZERO of them). Also confirmed
+                       # 7/8 episodes were re-attempts of an already-failed goal -- consistent
+                       # with the brain's own "prefer finishing an in-progress landmark"
+                       # instruction backfiring on a genuinely-unreachable one, not just a BFS
+                       # desync -- this position-based watchdog is a backstop for that too,
+                       # independent of what causes the specific desync/re-attempt.
+STUCK_MAX_DISTINCT_BBOX = 2
 
 MODEL_TRIGGER_INTERVAL = 15  # periodic brain check-in, independent of bootstrap/goal state --
                               # ported from llm_tools_vision_agent.py's "shared" mode (empirically
@@ -543,6 +550,9 @@ class MyAgent(Agent):
         self.pending_deltas: dict[str, tuple[int, int]] = {}  # unconfirmed first-time deltas, see _update_from_last_transition
         self.tried_actions: set[str] = set()  # exploration state -- separate from action_deltas confirmation
         self.blocked_values: set[int] = set()
+        self.confirmed_bar_colors: set[int] = set()  # permanent once seen fragmenting past
+                                                       # MAX_FRAGMENTS_PER_COLOR -- see
+                                                       # _update_from_last_transition
         self.effects_log: list[dict] = []
         self.visited_blob_keys: set[tuple[int, int, int]] = set()  # (color, bbox_r0, bbox_c0), coarse
         self.blob_attempt_count: dict[tuple, int] = {}  # bounds retries on an unreachable target, see below
@@ -605,6 +615,35 @@ class MyAgent(Agent):
         stats["total_diff"] += diff_count
         if diff_count == 0:
             stats["n_zero"] += 1
+
+        # persistent bar/gauge memory: once a color is EVER seen fragmenting into
+        # more than MAX_FRAGMENTS_PER_COLOR same-color components, remember it as
+        # bar-like for the rest of the game, not just the current frame. Fixes a
+        # known gap (see llm_relay_agent_experiments memory, 2026-09-01 entry): the
+        # raw per-frame fragment-count check alone stops excluding a bar once it
+        # depletes below the threshold, so its last few remaining segments start
+        # showing up as individual "landmarks" -- confirmed as the dominant real
+        # cause of ls20 stuck-loop episodes via a 10-game instrumented trace
+        # (2026-09-04, see STUCK_WINDOW's comment). Computed unconditionally (not
+        # gated on self_colors) so this also helps games where self is never
+        # identified (cd82/ka59/vc33-style) and effects-log/bar detection would
+        # otherwise never run at all. Position-independent by construction -- no
+        # assumption about WHERE a bar sits on the grid, only that a color's own
+        # fragment count once exceeded the threshold.
+        bar_counts_now = _bar_fragment_counts(grid, _bulk_colors(grid))
+        self.confirmed_bar_colors |= set(bar_counts_now.keys())
+
+        # A second signal (pixel-count shrink over time) was tried here and REVERTED
+        # (2026-09-04): ls20's real resource bar OSCILLATES (drains on steps, regrows
+        # on pickups -- see the "resource_bar_grew" effect below), so tracking "ever
+        # dropped below its historical max" wrongly flagged 5 different colors as
+        # bar-like after just 2 turns each (including likely-legitimate landmark
+        # colors), and crashed ls20's win rate from ~70% to 0/10 in a real trace.
+        # Caught before it shipped -- see feedback_verify_before_asserting. The
+        # fragment-count signal above is the one confirmed safe (7/10, no regression)
+        # and worth keeping; a real fix for ls20's specific solid-bar-that-erodes case
+        # needs a smarter signal (e.g. "shrinks immediately after every ACTION1-4,
+        # never after other actions") that hasn't been built yet.
 
         bulk = _bulk_colors(self.prev_grid)
         teleported = False
@@ -748,7 +787,7 @@ class MyAgent(Agent):
         # persistent/blinking visual near a landmark self is lingering next to would
         # get re-logged as a fresh "effect" every single turn
         if self.self_colors and not teleported:
-            exclude = bulk | self.self_colors | self.attached_colors
+            exclude = bulk | self.self_colors | self.attached_colors | self.confirmed_bar_colors
             cur_blobs = _find_blobs(grid, exclude)
             self_bbox = self.self_bbox or _raw_mask_bbox(grid, self.self_colors)
 
@@ -1066,11 +1105,21 @@ class MyAgent(Agent):
             if self.self_colors and self.prev_action_name is not None:
                 self.recent_action_log.append((self.prev_action_name, self.self_bbox))
                 if (len(self.recent_action_log) == self.recent_action_log.maxlen
-                        and len({e[0] for e in self.recent_action_log}) == 1
-                        and len({e[1] for e in self.recent_action_log}) == 1):
-                    # STUCK_WINDOW consecutive turns, same action, self never moved --
-                    # see STUCK_WINDOW's comment. Force a fresh plan next turn instead
-                    # of continuing to grind on a desynced/blocked path.
+                        and len({e[1] for e in self.recent_action_log}) <= STUCK_MAX_DISTINCT_BBOX):
+                    # position-based stuck detection -- see STUCK_WINDOW's comment for why
+                    # this replaced an action-identity-based check. Force a fresh plan next
+                    # turn instead of continuing to grind on a desynced/blocked/re-failing path.
+                    # Also count this as a failed ATTEMPT on whatever goal was active -- the
+                    # 10-game trace (see STUCK_WINDOW's comment) found 7/8 stuck episodes were
+                    # re-attempts of an already-failing goal, so crediting this toward the
+                    # existing blob_attempt_count>=3 give-up threshold (same mechanism used at
+                    # selection time) makes a persistently-blocked target get excluded sooner,
+                    # instead of only a fresh selection-time pick counting as an attempt.
+                    if self.current_goal_key is not None:
+                        self.blob_attempt_count[self.current_goal_key] = (
+                            self.blob_attempt_count.get(self.current_goal_key, 0) + 1)
+                        if self.blob_attempt_count[self.current_goal_key] >= 3:
+                            self.visited_blob_keys.add(self.current_goal_key)
                     self.current_path = []
                     self.current_goal_key = None
                     self.current_goal_bbox = None
@@ -1078,7 +1127,7 @@ class MyAgent(Agent):
                     self.recent_action_log.clear()
 
         bulk = _bulk_colors(grid)
-        blobs = _find_blobs(grid, bulk | self.self_colors | self.attached_colors)
+        blobs = _find_blobs(grid, bulk | self.self_colors | self.attached_colors | self.confirmed_bar_colors)
 
         # bootstrap phase: self not identified yet -- cycle through actions to seed movement data
         if not self.self_colors:
