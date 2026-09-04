@@ -183,6 +183,19 @@ MAX_BRAIN_CALLS_TOTAL = 20     # hard ceiling across the WHOLE game regardless o
                                # risk the original per-game cap was created to avoid, just no longer
                                # assuming one level is the only puzzle a game will ever present.
 
+DIRECT_ACTION_REPEAT = 4  # when the brain suggests trying an action directly (self never
+                           # identified -- movement laws show nothing spatial), commit to
+                           # repeating that SAME action for this many turns instead of just
+                           # once. A single press can't reveal or complete a discrete/cumulative
+                           # mechanic (a dial that needs several turns to reach the right index,
+                           # a mass-push that needs several pushes in one direction) -- taking it
+                           # once then immediately cycling to a different untried action (the old
+                           # behavior) never gave any one direction enough of a chance to show an
+                           # effect. Confirmed empirically (2026-09-04) that cd82/ka59 never
+                           # identify a self at all, so this bootstrap path is ALL either game
+                           # ever runs on for the whole 150-action budget -- see
+                           # llm_relay_agent_experiments memory.
+
 MODEL_TRIGGER_INTERVAL = 15  # periodic brain check-in, independent of bootstrap/goal state --
                               # ported from llm_tools_vision_agent.py's "shared" mode (empirically
                               # confirmed the best of 3 tested variants there, see
@@ -218,14 +231,31 @@ not be a meaningful plan -- the mechanic might not be about walking around at \
 all (e.g. a selector/dial, or a button you press). In that case, suggest \
 trying a specific ACTION directly instead of a landmark.
 
+You keep a short, persistent scratchpad of your own best current hypothesis \
+about how THIS SPECIFIC game works -- what the goal seems to be, which kind \
+of landmark is worth prioritizing, anything that tripped you up -- carried \
+forward across calls instead of being rederived from scratch each time. You \
+MUST write a concrete, specific sentence describing what THIS game actually \
+seems to be about, based on what you see below -- not a generic restatement \
+of these instructions and not a placeholder. Revise it as you learn more; \
+only repeat the exact same wording if it is still fully accurate and there is \
+truly nothing new to add.
+
 Your goal is to reach a WIN state / complete a level.
 
-Respond in exactly two parts:
+Respond in exactly three parts, each on its own line:
 1. A short reasoning (1 sentence).
-2. On the LAST line, write EITHER one landmark id (e.g. "blob_2") OR one \
+2. A line starting with "NOTES:" followed by your specific, concrete \
+one-sentence hypothesis about this game -- refine or extend your previous \
+notes, don't discard them unless they turned out wrong.
+3. On the LAST line, write EITHER one landmark id (e.g. "blob_2") OR one \
 available action name (e.g. "ACTION3") -- whichever you're recommending -- \
 and nothing else.
 """
+
+NOTES_MAX_CHARS = 400  # bounds how much the persistent-notes line can grow the prompt over a
+                        # long game -- a small CPU model summarizing its own prior summary each
+                        # turn could otherwise drift longer without limit
 
 
 def _grid_of(frame: FrameData) -> np.ndarray:
@@ -382,6 +412,10 @@ def _bfs_path(grid: np.ndarray, start: tuple[int, int], target_bbox: tuple,
         if len(path) >= 60:
             continue
         for action_name, (dr, dc) in deltas.items():
+            if action_name not in ACTION_NAME_TO_ENUM:
+                continue  # safety net: deltas should never contain ACTION6 (see
+                          # _update_from_last_transition's guards), but skip
+                          # defensively rather than KeyError if it ever does
             new_pos = (pos[0] + dr, pos[1] + dc)
             if new_pos in visited or blocked_at(new_pos):
                 continue
@@ -510,6 +544,11 @@ class MyAgent(Agent):
         self.goal_fail_count = 0
         self.brain_call_count = 0  # running total across the whole game -- see MAX_BRAIN_CALLS_TOTAL
         self.brain_calls_this_level = 0  # resets on level_changed -- see MAX_BRAIN_CALLS
+        self.brain_notes = ""  # persistent hypothesis the brain carries forward across its own
+                                # calls, updated in-place each consult instead of being rebuilt
+                                # from scratch -- see NOTES_MAX_CHARS and _consult_brain
+        self.direct_action_repeat_name: str | None = None  # see DIRECT_ACTION_REPEAT
+        self.direct_action_repeat_remaining = 0
         self.prev_grid: np.ndarray | None = None
         self.prev_action_name: str | None = None
         self.prev_self_pos: tuple[float, float] | None = None
@@ -579,7 +618,17 @@ class MyAgent(Agent):
                     teleported = True
                 elif delta != (0, 0):
                     self.self_bbox = cur_bbox
-                    if known_delta is None:
+                    # ACTION6 ("click") targets arbitrary coordinates each turn -- unlike
+                    # ACTION1-5/7 it has no single fixed compass-direction "delta" to
+                    # learn at all, so never record one into action_deltas/pending_deltas
+                    # (see the bootstrap branch below for the matching guard). Confirmed
+                    # empirically (2026-09-04): on s5i5 (a pure-click game), a click's
+                    # incidental large centroid shift got bootstrapped as if it were a
+                    # movement law, which later crashed _bfs_path with
+                    # KeyError('ACTION6') the moment it tried ACTION_NAME_TO_ENUM[...]
+                    # (ACTION6 only exists in the separate _CLICK_ACTION_NAME_TO_ENUM
+                    # table, since it's not a BFS-representable direction).
+                    if known_delta is None and self.prev_action_name != "ACTION6":
                         # don't trust a NEW action's very first observed delta outright --
                         # a one-off jump (character-swap, screen transition) would get
                         # permanently baked in as if it were this action's fixed movement
@@ -624,10 +673,16 @@ class MyAgent(Agent):
                         dest = (int(round(p0[0] + dr)), int(round(p0[1] + dc)))
                         if 0 <= dest[0] < self.prev_grid.shape[0] and 0 <= dest[1] < self.prev_grid.shape[1]:
                             self.blocked_values.add(int(self.prev_grid[dest]))
-        else:
+        elif self.prev_action_name != "ACTION6":
             # bootstrap: among non-bulk colors present in both frames, pick whichever
             # shows the LARGEST raw-mask centroid shift, requiring it to clear a
-            # threshold well above the sub-pixel noise a shared/split color can produce
+            # threshold well above the sub-pixel noise a shared/split color can produce.
+            # Never bootstrap self-identity off an ACTION6 click (see the matching
+            # guard above): a click can move/affect some OTHER object at the clicked
+            # coordinates, and its shift has no reason to represent a rigid "self"
+            # avatar the rest of this class's BFS/delta model assumes -- confirmed
+            # empirically this was exactly the root cause of the ACTION6 KeyError
+            # crash on s5i5 (a pure-click game, no rigid self-avatar even exists there).
             candidates = [int(c) for c in np.unique(self.prev_grid) if int(c) not in bulk]
             best_color, best_shift, best_delta = None, SHIFT_THRESHOLD, None
             for color in candidates:
@@ -798,6 +853,7 @@ class MyAgent(Agent):
 
         prompt = (
             f"{position_line}\n\n"
+            f"Your notes from earlier turns:\n{self.brain_notes or '(none yet -- this is your first consult this game)'}\n\n"
             f"Movement laws discovered so far:\n{self._movement_summary(legal_names)}\n\n"
             f"Landmarks visible now:\n" + "\n".join(blob_lines) + "\n\n"
             f"Effects discovered so far:\n" + "\n".join(effects_lines) + "\n\n"
@@ -814,6 +870,7 @@ class MyAgent(Agent):
             reply = ""
             print(f"[ToolsAgent] brain query failed/timed out: {e!r}")
         self.last_raw_response = reply
+        self._update_brain_notes(reply)
         chosen = None
         for line in reversed(reply.strip().splitlines()):
             line = line.strip()
@@ -825,6 +882,22 @@ class MyAgent(Agent):
         if chosen in legal_names:
             return None, chosen
         return None, None
+
+    def _update_brain_notes(self, reply: str) -> None:
+        """Pull the "NOTES:" line out of a brain reply and carry it forward as
+        `self.brain_notes`, fed back into the next prompt (see _consult_brain) --
+        this is the whole mechanism: a short persistent hypothesis the brain
+        writes for itself instead of every call reasoning from a blank slate.
+        Deliberately tolerant of a malformed/missing NOTES line (older prompt
+        format, or the model just not following instructions) -- falls back to
+        keeping whatever notes were already there rather than erasing them."""
+        for line in reply.strip().splitlines():
+            line = line.strip()
+            if line.upper().startswith("NOTES:"):
+                text = line[len("NOTES:"):].strip()
+                if text and text.lower() not in ("(unchanged)", "unchanged"):
+                    self.brain_notes = text[:NOTES_MAX_CHARS]
+                return
 
     def _choose_click_action(self, grid: np.ndarray, blobs: list[dict],
                               legal_names: list[str]) -> GameAction:
@@ -873,6 +946,7 @@ class MyAgent(Agent):
             self.self_bbox = None  # stale post-reset; force a fresh local/global search next turn
             self.current_path = []
             self.current_goal_key = None
+            self.direct_action_repeat_remaining = 0  # don't carry a pre-reset commitment across
             return GameAction.RESET
 
         legal = [a for a in latest_frame.available_actions if a in _CLICK_ACTION_NAMES]
@@ -913,6 +987,15 @@ class MyAgent(Agent):
                 self.prev_grid = grid
                 self.prev_action_name = action.name
                 return action
+            if self.direct_action_repeat_remaining > 0 and self.direct_action_repeat_name in legal_names:
+                # mid-commitment to a brain-suggested action -- see DIRECT_ACTION_REPEAT.
+                # Skip round-robin/brain-consult entirely this turn, just repeat it.
+                self.direct_action_repeat_remaining -= 1
+                chosen_name = self.direct_action_repeat_name
+                self.tried_actions.add(chosen_name)
+                self.prev_grid = grid
+                self.prev_action_name = chosen_name
+                return _CLICK_ACTION_NAME_TO_ENUM[chosen_name]
             if self._periodic_due():
                 # periodic check-in even during bootstrap -- see MODEL_TRIGGER_INTERVAL: a
                 # game where self is never identified (ka59/vc33-style mechanics) would
@@ -920,6 +1003,8 @@ class MyAgent(Agent):
                 _, direct_action_name = self._consult_brain(blobs, legal_names, self_pos=None)
                 if direct_action_name is not None:
                     self.tried_actions.add(direct_action_name)
+                    self.direct_action_repeat_name = direct_action_name
+                    self.direct_action_repeat_remaining = DIRECT_ACTION_REPEAT - 1
                     self.prev_grid = grid
                     self.prev_action_name = direct_action_name
                     return _CLICK_ACTION_NAME_TO_ENUM[direct_action_name]
