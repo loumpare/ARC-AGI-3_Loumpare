@@ -5,9 +5,29 @@ exact structure of notebooks/submission_kernel/submission.ipynb (the GRPO
 agent's notebook) -- see kaggle_submission_pipeline memory for why this
 structure exists (gateway sidecar, two-phase submit, dummy-parquet fallback).
 """
+import re
+
 import nbformat as nbf
 
-AGENT_SOURCE = open("my_agent_tools.py").read()
+
+def _strip_future_import(src: str) -> str:
+    # Only one `from __future__ import annotations` is allowed per file, and it
+    # must be the first statement -- both src/state_graph.py and
+    # my_agent_tools.py have their own, so strip it here and re-add exactly
+    # one at the very top of the concatenated bundle below.
+    return re.sub(r"^from __future__ import annotations\n", "", src, count=1, flags=re.MULTILINE)
+
+
+# my_agent_tools.py now does `from state_graph import StateGraph, state_signature`
+# (src/llm_tools_agent.py 2026-09-04). Kaggle's kernel only gets this one file
+# written via %%writefile below -- there's no second importable module on its
+# filesystem -- so inline state_graph.py's source directly instead of shipping
+# a separate file the import would fail to find.
+STATE_GRAPH_SOURCE = _strip_future_import(open("../../src/state_graph.py").read())
+AGENT_SOURCE_RAW = _strip_future_import(open("my_agent_tools.py").read()).replace(
+    "from state_graph import StateGraph, state_signature\n", ""
+)
+AGENT_SOURCE = "from __future__ import annotations\n\n" + STATE_GRAPH_SOURCE + "\n\n" + AGENT_SOURCE_RAW
 
 nb = nbf.v4.new_notebook()
 nb["metadata"] = {
