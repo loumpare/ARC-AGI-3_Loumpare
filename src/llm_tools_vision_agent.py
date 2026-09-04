@@ -274,16 +274,10 @@ class VisionToolsAgent(ToolsAgent):
         self.tried_actions.add("ACTION6")
         return action
 
-    def _movement_summary(self, legal_names: list[str]) -> str:
-        lines = []
-        for name in legal_names:
-            if name in self.action_deltas:
-                dr, dc = self.action_deltas[name]
-                lines.append(f"- {name}: CONFIRMED to move you by (row {dr:+d}, col {dc:+d})")
-            elif name in self.tried_actions:
-                lines.append(f"- {name}: tried, no confirmed movement (may be non-spatial -- "
-                              f"a button/toggle/selector rather than movement)")
-        return "\n".join(lines) if lines else "(no actions tried yet)"
+    # _movement_summary: inherited from ToolsAgent unchanged (was a byte-identical
+    # duplicate override here before 2026-09-04's diff-magnitude-stats addition --
+    # removed so both classes automatically share one implementation instead of
+    # needing every future improvement ported to two places)
 
     def _consult_models(self, grid: np.ndarray, blobs: list[dict], legal_names: list[str],
                          self_pos: tuple[float, float] | None,
