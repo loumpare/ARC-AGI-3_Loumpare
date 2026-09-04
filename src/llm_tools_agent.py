@@ -196,6 +196,13 @@ DIRECT_ACTION_REPEAT = 4  # when the brain suggests trying an action directly (s
                            # ever runs on for the whole 150-action budget -- see
                            # llm_relay_agent_experiments memory.
 
+STUCK_WINDOW = 4  # if the agent takes the SAME action this many turns in a row and self's
+                   # position never changes across any of them, declare it stuck and force a
+                   # replan instead of grinding on. Generic safety net, not tied to any one
+                   # game -- catches whatever the specific desync cause was (BFS plan computed
+                   # against a not-yet-confirmed wall, round-robin fallback modulo-cycling back
+                   # onto a known-blocked direction, etc.) without needing to diagnose which one.
+
 MODEL_TRIGGER_INTERVAL = 15  # periodic brain check-in, independent of bootstrap/goal state --
                               # ported from llm_tools_vision_agent.py's "shared" mode (empirically
                               # confirmed the best of 3 tested variants there, see
@@ -540,7 +547,21 @@ class ToolsAgent(Agent):
         self.visited_blob_keys: set[tuple[int, int, int]] = set()  # (color, bbox_r0, bbox_c0), coarse
         self.blob_attempt_count: dict[tuple, int] = {}  # bounds retries on an unreachable target, see below
         self.current_goal_key: tuple | None = None
+        self.current_goal_bbox: tuple | None = None  # target bbox for the in-flight plan, kept
+                                                       # alongside current_goal_key so arrival can
+                                                       # be verified once the plan is exhausted --
+                                                       # see pending_arrival_check
+        self.pending_arrival_check: tuple | None = None  # set when a BFS plan's last action was
+                                                           # just taken -- resolved at the TOP of
+                                                           # the next call, once self_bbox reflects
+                                                           # that action's real effect (see
+                                                           # _update_from_last_transition timing)
         self.current_path: list[GameAction] = []
+        self.recent_action_log: deque[tuple[str, tuple | None]] = deque(maxlen=STUCK_WINDOW)
+        self.action_diff_stats: dict[str, dict] = {}  # per-action (n_tries, n_zero, total_diff) --
+                                                        # lets the brain see "this action changes
+                                                        # ~N px every time" without re-deriving it
+                                                        # from scratch each consult
         self.goal_fail_count = 0
         self.brain_call_count = 0  # running total across the whole game -- see MAX_BRAIN_CALLS_TOTAL
         self.brain_calls_this_level = 0  # resets on level_changed -- see MAX_BRAIN_CALLS
@@ -570,6 +591,21 @@ class ToolsAgent(Agent):
         """Pure code: figure out what moved, what blocked, what effects occurred."""
         if self.prev_grid is None or self.prev_action_name is None:
             return
+
+        # per-action diff-magnitude stats, tracked regardless of whether self has
+        # been identified -- gives the brain a cheap, code-computed signal ("this
+        # action changes ~N px every time" vs "does literally nothing") instead of
+        # having to re-guess an action's role from scratch each consult. See
+        # _movement_summary, where this surfaces for actions with no confirmed
+        # movement delta.
+        diff_count = int((self.prev_grid != grid).sum())
+        stats = self.action_diff_stats.setdefault(
+            self.prev_action_name, {"n_tries": 0, "n_zero": 0, "total_diff": 0})
+        stats["n_tries"] += 1
+        stats["total_diff"] += diff_count
+        if diff_count == 0:
+            stats["n_zero"] += 1
+
         bulk = _bulk_colors(self.prev_grid)
         teleported = False
 
@@ -800,6 +836,17 @@ class ToolsAgent(Agent):
             if name in self.action_deltas:
                 dr, dc = self.action_deltas[name]
                 lines.append(f"- {name}: CONFIRMED to move you by (row {dr:+d}, col {dc:+d})")
+                continue
+            stats = self.action_diff_stats.get(name)
+            if stats and stats["n_tries"] > 0:
+                if stats["n_zero"] == stats["n_tries"]:
+                    lines.append(f"- {name}: tried {stats['n_tries']}x, ZERO visible change on the "
+                                  f"grid every time (likely inert or blocked from here)")
+                else:
+                    avg = stats["total_diff"] / stats["n_tries"]
+                    lines.append(f"- {name}: tried {stats['n_tries']}x, no confirmed self-movement "
+                                  f"but changes ~{avg:.0f} pixels on the grid EVERY time (likely a "
+                                  f"real non-spatial effect -- selector/button/toggle, not blocked)")
             elif name in self.tried_actions:
                 lines.append(f"- {name}: tried, no confirmed movement (may be non-spatial -- "
                               f"a button/toggle/selector rather than movement)")
@@ -946,6 +993,9 @@ class ToolsAgent(Agent):
             self.self_bbox = None  # stale post-reset; force a fresh local/global search next turn
             self.current_path = []
             self.current_goal_key = None
+            self.current_goal_bbox = None
+            self.pending_arrival_check = None
+            self.recent_action_log.clear()
             self.direct_action_repeat_remaining = 0  # don't carry a pre-reset commitment across
             return GameAction.RESET
 
@@ -970,8 +1020,62 @@ class ToolsAgent(Agent):
             # per-game pool. brain_call_count (the running total) is kept unchanged
             # for logging/telemetry and as the overall Kaggle-latency safety net below.
             self.brain_calls_this_level = 0
+            # a level change moves self to a brand-new layout -- any in-flight
+            # arrival check or same-action streak was measuring the OLD level and
+            # would be comparing apples to oranges against the new one
+            self.pending_arrival_check = None
+            self.recent_action_log.clear()
         self.prev_levels_completed = latest_frame.levels_completed
         self._update_from_last_transition(grid)
+
+        if not level_changed:
+            if self.pending_arrival_check is not None:
+                # resolve the arrival check deferred from the LAST turn (see
+                # current_goal_bbox/pending_arrival_check comments in __init__) --
+                # self.self_bbox now reflects that final action's real effect, so
+                # this is the first point this can be checked honestly. Confirmed
+                # via a real playthrough this was previously NOT checked at all:
+                # the old code declared "arrived" the instant current_path emptied,
+                # even if a stale plan (computed before a wall got confirmed) never
+                # actually got self there -- silently marking an unreached target
+                # visited and moving on, instead of retrying or picking elsewhere.
+                #
+                # Uses the exact same point-vs-bbox/margin-2 rule as _bfs_path's own
+                # overlaps_target -- NOT a bbox-vs-bbox comparison (tried first,
+                # empirically broken: confirmed via instrumented real ls20 play that
+                # it almost NEVER succeeded, tanking win rate from ~3/4 to ~1/7-1/10).
+                # self.self_bbox only spans self's tracked color, which can be a
+                # strict sub-region of the full multi-color sprite (e.g. ls20's
+                # two-tone body) offset from where BFS's own centroid-based search
+                # considered itself "arrived" -- a bbox-edge comparison is stricter
+                # than the single-point check BFS itself already succeeded by, so it
+                # was rejecting real arrivals BFS had already correctly achieved.
+                arrived = False
+                if self.self_bbox is not None:
+                    r, c = _bbox_centroid(self.self_bbox)
+                    tr0, tr1, tc0, tc1 = self.pending_arrival_check
+                    arrived = tr0 - 2 <= r <= tr1 + 2 and tc0 - 2 <= c <= tc1 + 2
+                if arrived:
+                    self.goal_fail_count = 0
+                    if self.current_goal_key is not None:
+                        self.visited_blob_keys.add(self.current_goal_key)
+                else:
+                    self.goal_fail_count += 1
+                self.pending_arrival_check = None
+
+            if self.self_colors and self.prev_action_name is not None:
+                self.recent_action_log.append((self.prev_action_name, self.self_bbox))
+                if (len(self.recent_action_log) == self.recent_action_log.maxlen
+                        and len({e[0] for e in self.recent_action_log}) == 1
+                        and len({e[1] for e in self.recent_action_log}) == 1):
+                    # STUCK_WINDOW consecutive turns, same action, self never moved --
+                    # see STUCK_WINDOW's comment. Force a fresh plan next turn instead
+                    # of continuing to grind on a desynced/blocked path.
+                    self.current_path = []
+                    self.current_goal_key = None
+                    self.current_goal_bbox = None
+                    self.goal_fail_count = max(self.goal_fail_count, 1)
+                    self.recent_action_log.clear()
 
         bulk = _bulk_colors(grid)
         blobs = _find_blobs(grid, bulk | self.self_colors | self.attached_colors)
@@ -1061,6 +1165,7 @@ class ToolsAgent(Agent):
                 target = _closest_blob(unvisited, self_pos) or _closest_blob(blobs, self_pos)
             if target is not None:
                 self.current_goal_key = (target["color"], target["bbox"][0], target["bbox"][2])
+                self.current_goal_bbox = target["bbox"]  # see pending_arrival_check
                 # NOT marked visited here anymore (was: immediately on selection, even
                 # before confirming BFS found a path or self ever arrived) -- confirmed
                 # via a real playthrough GIF (2026-09-03) that this caused the agent to
@@ -1092,8 +1197,10 @@ class ToolsAgent(Agent):
         action = self.current_path.pop(0)
         self.prev_grid = grid
         self.prev_action_name = action.name
-        if not self.current_path:
-            self.goal_fail_count = 0
-            if self.current_goal_key is not None:
-                self.visited_blob_keys.add(self.current_goal_key)  # confirmed arrival -- see above
+        if not self.current_path and self.current_goal_bbox is not None:
+            # defer the actual arrival verdict to the TOP of the next call, once
+            # self_bbox reflects this action's real effect -- see
+            # pending_arrival_check's comment in __init__ and the resolution logic
+            # in _choose_action_impl right after _update_from_last_transition
+            self.pending_arrival_check = self.current_goal_bbox
         return action
