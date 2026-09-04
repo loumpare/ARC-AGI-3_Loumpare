@@ -105,7 +105,19 @@ def build_torch_dataset(manifest: VisionDistillationDataset, processor):
             labels = full["input_ids"][0].clone()
             labels[: len(prompt_ids)] = -100  # mask the prompt -- only the target_text contributes to loss
 
-            item = {k: v[0] if v.dim() > 1 else v for k, v in full.items()}
+            # Qwen2.5-VL's processor does NOT return pixel_values as a normal
+            # [batch, ...] image tensor -- it's already a packed patch sequence
+            # ([total_patches, patch_dim], confirmed empirically: shape (1296, 1176)
+            # for one 512x512 image, no leading batch-of-1 to strip). Blindly
+            # squeezing every multi-dim tensor's first axis (the naive
+            # `v[0] if v.dim()>1` this replaced) silently sliced pixel_values down
+            # to ONE patch row and corrupted image_grid_thw, causing a reshape
+            # crash deep in the vision tower on the first real training batch --
+            # caught via --dry-run before it could waste a real training run.
+            # Only input_ids/attention_mask/mm_token_type_ids are actually
+            # [1, seq_len] and need the batch-of-1 dropped.
+            squeeze_keys = {"input_ids", "attention_mask", "mm_token_type_ids"}
+            item = {k: (v[0] if k in squeeze_keys else v) for k, v in full.items()}
             item["labels"] = labels
             return item
 
@@ -163,7 +175,13 @@ def train(dataset_dir: str, output_dir: str, epochs: int = 3, lr: float = 1e-4,
     if dry_run:
         print("dry-run: building one batch and computing loss, not training")
         batch = torch_dataset[0]
-        batch = {k: v.unsqueeze(0).to(model.device) for k, v in batch.items()}
+        # same distinction as build_torch_dataset's __getitem__: pixel_values/
+        # image_grid_thw are already in their natural (no fake batch-of-1) shape,
+        # only the text-side tensors need an added batch dimension for a
+        # single-example forward pass
+        no_unsqueeze = {"pixel_values", "image_grid_thw"}
+        batch = {k: (v if k in no_unsqueeze else v.unsqueeze(0)).to(model.device)
+                 for k, v in batch.items()}
         with torch.no_grad():
             out = model(**batch)
         print(f"loss on 1 example: {out.loss.item():.4f}")
