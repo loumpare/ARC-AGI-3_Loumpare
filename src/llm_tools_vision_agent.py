@@ -131,9 +131,22 @@ log tells you. Prefer landmarks you haven't visited yet, unless the effects \
 log suggests a specific landmark is useful to revisit. Your goal is to reach \
 a WIN state / complete a level.
 
-Respond in exactly two parts:
+You keep a short, persistent scratchpad of your own best current hypothesis \
+about how THIS SPECIFIC game works -- what the goal seems to be, which kind \
+of landmark is worth prioritizing, anything that tripped you up -- carried \
+forward across calls instead of being rederived from scratch each time. You \
+MUST write a concrete, specific sentence describing what THIS game actually \
+seems to be about, based on what you see below (including the vision \
+module's notes) -- not a generic restatement of these instructions and not a \
+placeholder. Revise it as you learn more; only repeat the exact same wording \
+if it is still fully accurate and there is truly nothing new to add.
+
+Respond in exactly three parts, each on its own line:
 1. A short reasoning (1 sentence).
-2. On the LAST line, write EITHER one landmark id (e.g. "blob_2") OR one \
+2. A line starting with "NOTES:" followed by your specific, concrete \
+one-sentence hypothesis about this game -- refine or extend your previous \
+notes, don't discard them unless they turned out wrong.
+3. On the LAST line, write EITHER one landmark id (e.g. "blob_2") OR one \
 available action name (e.g. "ACTION3") -- whichever you're recommending -- \
 and nothing else.
 """
@@ -321,6 +334,7 @@ class VisionToolsAgent(ToolsAgent):
 
         prompt = (
             f"{position_line}\n\n"
+            f"Your notes from earlier turns:\n{self.brain_notes or '(none yet -- this is your first consult this game)'}\n\n"
             f"Movement laws discovered so far:\n{self._movement_summary(legal_names)}\n\n"
             f"Vision module's scene notes:\n{self.scene_notes or '(not available this run)'}\n\n"
             f"Landmarks visible now:\n" + "\n".join(blob_lines) + "\n\n"
@@ -336,6 +350,7 @@ class VisionToolsAgent(ToolsAgent):
             reply = ""
             print(f"[VisionToolsAgent] brain query failed/timed out: {e!r}")
         self.last_raw_response = reply
+        self._update_brain_notes(reply)  # inherited from ToolsAgent, same NOTES: parsing
 
         chosen = None
         for line in reversed(reply.strip().splitlines()):
