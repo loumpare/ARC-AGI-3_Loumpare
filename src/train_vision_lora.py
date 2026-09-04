@@ -57,11 +57,26 @@ class VisionDistillationDataset:
     build_dataset() once torch/PIL are actually needed (mirrors
     train_brain_grpo.py's existing pattern of deferring heavy imports)."""
 
-    def __init__(self, dataset_dir: str):
+    def __init__(self, dataset_dir: str, oversample_structural: int = 1):
         self.dataset_dir = dataset_dir
         manifest_path = os.path.join(dataset_dir, "manifest.jsonl")
         with open(manifest_path) as f:
             self.examples = [json.loads(line) for line in f if line.strip()]
+
+        if oversample_structural > 1:
+            # structural-fact examples ("blob_X and blob_Y are the SAME object...")
+            # were only 90/735 (~12%) of the generated dataset -- confirmed via a
+            # real eval (2026-09-04) that 1 epoch at that ratio wasn't enough
+            # repetition for the model to generalize this specific pattern (it
+            # correctly adopted the precise-grounding STYLE from the majority
+            # pattern, but fell back to describing an interrupted pair as two
+            # ordinary separate objects). Repeating structural examples brings
+            # their effective share up without needing a bigger raw dataset.
+            structural = [e for e in self.examples if "SAME object" in e["target_text"]]
+            self.examples += structural * (oversample_structural - 1)
+            print(f"oversampled {len(structural)} structural examples x{oversample_structural} "
+                  f"-> {len(self.examples)} total examples "
+                  f"({len(structural) * oversample_structural / len(self.examples):.0%} structural)")
 
     def __len__(self) -> int:
         return len(self.examples)
@@ -124,9 +139,40 @@ def build_torch_dataset(manifest: VisionDistillationDataset, processor):
     return _TorchDataset()
 
 
+def build_collate_fn(processor):
+    """Trainer's DEFAULT collator crashes on this data (confirmed via a real
+    training run, not guessed): it tries to torch.stack pixel_values/
+    image_grid_thw the same generic way as input_ids, but those are packed
+    variable-length patch sequences (see build_torch_dataset's __getitem__
+    comment) -- concatenating along dim 0 is the correct operation, matching
+    how the processor itself would batch multiple images. Text tensors
+    (input_ids/attention_mask/labels) genuinely do need padding to the batch's
+    max length, which the default collator does correctly -- only the
+    image-side tensors needed a custom rule."""
+    import torch
+    from torch.nn.utils.rnn import pad_sequence
+
+    pad_id = processor.tokenizer.pad_token_id
+
+    def collate_fn(batch: list[dict]) -> dict:
+        out = {
+            "input_ids": pad_sequence([b["input_ids"] for b in batch], batch_first=True, padding_value=pad_id),
+            "attention_mask": pad_sequence([b["attention_mask"] for b in batch], batch_first=True, padding_value=0),
+            "labels": pad_sequence([b["labels"] for b in batch], batch_first=True, padding_value=-100),
+            "pixel_values": torch.cat([b["pixel_values"] for b in batch], dim=0),
+            "image_grid_thw": torch.cat([b["image_grid_thw"] for b in batch], dim=0),
+        }
+        if "mm_token_type_ids" in batch[0]:
+            out["mm_token_type_ids"] = pad_sequence(
+                [b["mm_token_type_ids"] for b in batch], batch_first=True, padding_value=0)
+        return out
+
+    return collate_fn
+
+
 def train(dataset_dir: str, output_dir: str, epochs: int = 3, lr: float = 1e-4,
           lora_r: int = 16, lora_alpha: int = 32, max_steps: int | None = None,
-          dry_run: bool = False) -> None:
+          dry_run: bool = False, oversample_structural: int = 1) -> None:
     import torch
     from peft import LoraConfig, get_peft_model
     from transformers import (
@@ -153,7 +199,7 @@ def train(dataset_dir: str, output_dir: str, epochs: int = 3, lr: float = 1e-4,
     model = get_peft_model(model, lora_config)
     model.print_trainable_parameters()
 
-    manifest = VisionDistillationDataset(dataset_dir)
+    manifest = VisionDistillationDataset(dataset_dir, oversample_structural=oversample_structural)
     print(f"{len(manifest)} examples in dataset")
     torch_dataset = build_torch_dataset(manifest, processor)
 
@@ -170,7 +216,8 @@ def train(dataset_dir: str, output_dir: str, epochs: int = 3, lr: float = 1e-4,
         report_to=[],
     )
 
-    trainer = Trainer(model=model, args=args, train_dataset=torch_dataset)
+    trainer = Trainer(model=model, args=args, train_dataset=torch_dataset,
+                       data_collator=build_collate_fn(processor))
 
     if dry_run:
         print("dry-run: building one batch and computing loss, not training")
@@ -204,6 +251,10 @@ if __name__ == "__main__":
     p.add_argument("--dry-run", action="store_true",
                     help="build one batch and compute loss only, don't actually train -- "
                          "sanity-checks the data pipeline before committing to a real run")
+    p.add_argument("--oversample-structural", type=int, default=1,
+                    help="repeat structural-fact examples (interrupted-pair detections) this "
+                         "many times -- they were only ~12%% of the generated dataset, found "
+                         "empirically (2026-09-04) to be too rare for 1 epoch to generalize")
     args = p.parse_args()
     train(args.dataset_dir, args.output_dir, args.epochs, args.lr,
-          args.lora_r, args.lora_alpha, args.max_steps, args.dry_run)
+          args.lora_r, args.lora_alpha, args.max_steps, args.dry_run, args.oversample_structural)
