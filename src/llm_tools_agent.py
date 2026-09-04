@@ -37,6 +37,8 @@ from scipy import ndimage
 
 from agents.agent import Agent
 
+from state_graph import StateGraph, state_signature
+
 # Two inference backends for the "brain" (Qwen2.5-7B), picked automatically:
 #   - local Ollama server (http://localhost:11434) for local dev/testing, where
 #     the model is already pulled and GPU-served
@@ -630,6 +632,21 @@ class ToolsAgent(Agent):
         self.prev_touched_keys: set[tuple] = set()  # landmarks already overlapping last turn (avoid re-logging)
         self.action_deltas: dict[str, tuple[int, int]] = {}
         self.pending_deltas: dict[str, tuple[int, int]] = {}  # unconfirmed first-time deltas, see _update_from_last_transition
+        self.pending_self_candidates: dict[tuple[int, str], tuple] = {}  # unconfirmed self-bootstrap
+                                                                          # guesses, keyed by (color,
+                                                                          # action) -- see
+                                                                          # _update_from_last_transition.
+                                                                          # A dict, not one scalar slot:
+                                                                          # round-robin bootstrap cycles
+                                                                          # through a DIFFERENT action
+                                                                          # every turn, so a single-slot
+                                                                          # "last candidate" would get
+                                                                          # overwritten before the same
+                                                                          # (color, action) pair was ever
+                                                                          # seen twice -- confirmed
+                                                                          # empirically (2026-09-04) this
+                                                                          # exact bug silently broke ls20
+                                                                          # self-identification entirely.
         self.tried_actions: set[str] = set()  # exploration state -- separate from action_deltas confirmation
         self.blocked_values: set[int] = set()
         self.confirmed_bar_colors: set[int] = set()  # permanent once seen fragmenting past
@@ -662,6 +679,11 @@ class ToolsAgent(Agent):
                                 # from scratch -- see NOTES_MAX_CHARS and _consult_brain
         self.direct_action_repeat_name: str | None = None  # see DIRECT_ACTION_REPEAT
         self.direct_action_repeat_remaining = 0
+        self.state_graph = StateGraph()  # for games where self is never identified -- see
+                                          # state_graph.py and the "not self.self_colors" branch
+                                          # of _choose_action_impl
+        self.prev_state_sig: tuple | None = None
+        self.state_graph_path: list[str] = []
         self.prev_grid: np.ndarray | None = None
         self.prev_action_name: str | None = None
         self.prev_self_pos: tuple[float, float] | None = None
@@ -853,16 +875,34 @@ class ToolsAgent(Agent):
                     best_shift = shift
                     best_delta = (round(p1[0] - p0[0]), round(p1[1] - p0[1]))
             if best_color is not None:
-                self.self_colors = {best_color}
-                self.self_bbox = _raw_mask_bbox(grid, self.self_colors)
-                self.action_deltas[self.prev_action_name] = best_delta
-                # any color forming a blob immediately touching self RIGHT NOW is
-                # almost certainly another part of self's own sprite (rigidly glued,
-                # e.g. a two-tone body) -- exclude it from ever being a landmark,
-                # without folding it into position-tracking (keeps that math clean)
-                for b in _find_blobs(grid, bulk | self.self_colors):
-                    if _bbox_overlaps_or_adjacent(self.self_bbox, b["bbox"], margin=1):
-                        self.attached_colors.add(b["color"])
+                # don't commit to a self-identity on the FIRST large shift seen --
+                # require the same (color, action, delta) combination to repeat once
+                # before trusting it, matching the standard already used for a NEW
+                # action's delta once self is already known (pending_deltas below).
+                # Added 2026-09-04 after confirming empirically that giving movement
+                # actions a chance to run during cd82/ka59's bootstrap (see the
+                # non_click_names change in _choose_action_impl) let a single
+                # non-Cartesian repaint (a rotating selector, a mass-push shove) get
+                # misidentified as "self moving" -- the tell was wildly inconsistent
+                # delta magnitudes across actions (e.g. ka59: ACTION1 (14,22) vs
+                # ACTION2-4 around (2,0)), not something a single rigid sprite would
+                # ever produce.
+                cand_key = (best_color, self.prev_action_name)
+                if self.pending_self_candidates.get(cand_key) == best_delta:
+                    self.self_colors = {best_color}
+                    self.self_bbox = _raw_mask_bbox(grid, self.self_colors)
+                    self.action_deltas[self.prev_action_name] = best_delta
+                    self.pending_self_candidates = {}
+                    # any color forming a blob immediately touching self RIGHT NOW is
+                    # almost certainly another part of self's own sprite (rigidly
+                    # glued, e.g. a two-tone body) -- exclude it from ever being a
+                    # landmark, without folding it into position-tracking (keeps
+                    # that math clean)
+                    for b in _find_blobs(grid, bulk | self.self_colors):
+                        if _bbox_overlaps_or_adjacent(self.self_bbox, b["bbox"], margin=1):
+                            self.attached_colors.add(b["color"])
+                else:
+                    self.pending_self_candidates[cand_key] = best_delta
 
         # effects: did self just touch/overlap a landmark? log any OTHER region that
         # changed, but only on the turn a landmark is NEWLY touched -- otherwise a
@@ -1121,6 +1161,9 @@ class ToolsAgent(Agent):
             self.pending_arrival_check = None
             self.recent_action_log.clear()
             self.direct_action_repeat_remaining = 0  # don't carry a pre-reset commitment across
+            self.prev_state_sig = None  # stale post-reset; state_graph itself is NOT cleared --
+            self.state_graph_path = []  # learned edges/goals stay valid across a reset, only the
+                                         # in-flight plan and "last known position" reset
             return GameAction.RESET
 
         legal = [a for a in latest_frame.available_actions if a in _CLICK_ACTION_NAMES]
@@ -1216,11 +1259,49 @@ class ToolsAgent(Agent):
 
         # bootstrap phase: self not identified yet -- cycle through actions to seed movement data
         if not self.self_colors:
-            if "ACTION6" in legal_names:
-                # a click-capable game where no movement-based self has ever been
-                # identified (generic condition -- true for any click-only game,
-                # not specifically vc33, see feedback_no_game_hacking) -- the whole
-                # self/BFS model doesn't apply, route to the dedicated click handler
+            # generic clustered state-graph (see state_graph.py): observe every
+            # transition regardless of which sub-branch below ends up choosing the
+            # action, and if a path to a previously-discovered goal state (a
+            # levels_completed increase) is known, follow it -- takes priority
+            # over everything else here since it's the only option backed by an
+            # actual observed win, not a guess. A no-op until the FIRST real win
+            # on this game (find_path returns None with an empty goal set), so
+            # this is purely additive: it cannot make an already-tried game worse,
+            # only give it a shot at reusing a win once one has ever happened.
+            sig = state_signature(blobs)
+            if self.prev_state_sig is not None and self.prev_action_name is not None:
+                self.state_graph.record_transition(self.prev_state_sig, self.prev_action_name, sig)
+            if level_changed:
+                self.state_graph.mark_goal(sig)
+                self.state_graph_path = []  # a level transition invalidates any in-flight plan
+            self.prev_state_sig = sig
+
+            if not self.state_graph_path:
+                self.state_graph_path = self.state_graph.find_path(sig) or []
+            if self.state_graph_path:
+                chosen_name = self.state_graph_path.pop(0)
+                if chosen_name in legal_names:
+                    self.tried_actions.add(chosen_name)
+                    self.prev_grid = grid
+                    self.prev_action_name = chosen_name
+                    return _CLICK_ACTION_NAME_TO_ENUM[chosen_name]
+                self.state_graph_path = []  # stale (action no longer legal) -- replan next time
+
+            non_click_names = [n for n in legal_names if n != "ACTION6"]
+            non_click_tried = all(n in self.tried_actions for n in non_click_names)
+            if "ACTION6" in legal_names and (not non_click_names or non_click_tried):
+                # pure-click game (no movement actions at all, e.g. vc33) OR every
+                # non-click action already tried at least once without self ever
+                # being found -- route to the dedicated click handler. Changed
+                # 2026-09-04 from an unconditional check: cd82/ka59 mix ACTION6
+                # with real movement actions (ACTION1-5, confirmed via
+                # available_actions inspection) that drive the actual dial/
+                # mass-push mechanic -- the old unconditional-click-first order
+                # meant those actions were NEVER tried during bootstrap, so
+                # action_deltas/the state graph could never observe their real
+                # effect. vc33 (no non-click actions at all) is unaffected:
+                # non_click_names is empty there, so this still routes to click
+                # immediately, identical to the old behavior.
                 action = self._choose_click_action(grid, blobs, legal_names)
                 self.prev_grid = grid
                 self.prev_action_name = action.name
