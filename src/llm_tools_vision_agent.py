@@ -58,6 +58,7 @@ from llm_tools_agent import (
     _grid_of,
     _ollama_available,
     _query_brain_bounded,
+    _structural_fact_lines,
 )
 
 # ACTION6 ("click") is deliberately NOT added to llm_tools_agent's shared
@@ -104,6 +105,22 @@ pushable objects), a row of similar small shapes (possibly buttons or a \
 selector). Do not guess what the game's objective is or what any action does. \
 Be concise (4-6 sentences), and reference the object list's ids (e.g. blob_2) \
 when describing something.
+
+Each object's id label ("blob_0", "blob_1", ...) is drawn directly ON the \
+image next to it -- use that to check which id you actually mean before \
+naming it, instead of guessing which shape an id refers to.
+
+Before calling two same-colored objects "separate" or "parallel", check \
+their given bounding boxes: if they're nearly touching (close row/col \
+ranges) with a THIRD, differently-colored object sitting in the gap between \
+them, that's much more likely to be ONE object interrupted by that other \
+object (e.g. a bar with a position marker on it) than two independent ones. \
+Say so explicitly when you notice this pattern.
+
+Keep uncertain interpretation clearly separate from what the object list \
+already guarantees as fact. Phrase guesses as "possibly"/"likely"/"could be" \
+-- do not state an interpretation (what something IS or DOES) with the same \
+confidence as a given position/color/size.
 """
 
 BRAIN_SYSTEM_PROMPT = """\
@@ -152,10 +169,23 @@ and nothing else.
 """
 
 
-def _grid_to_image_b64(grid: np.ndarray) -> str:
+def _grid_to_image_b64(grid: np.ndarray, blobs: list[dict] | None = None) -> str:
+    """Renders the grid, and if `blobs` is given, labels each one "blob_N"
+    directly on the image next to its centroid -- see EYES_SYSTEM_PROMPT: this
+    lets Gemma check which shape an id actually refers to instead of having to
+    match a separate text list to the image by eye, which was a source of
+    hallucinated blob-to-shape mappings (confirmed by inspecting real replies
+    against the actual grid, 2026-09-04 -- e.g. "blob_3, blob_4, blob_5 grouped
+    in the lower right" on ls20 didn't match anything actually in that region)."""
     fig, ax = plt.subplots(figsize=(6, 6), dpi=UPSCALE_SIZE // 6)
     ax.imshow(grid.astype(float), vmin=0, vmax=15, cmap="tab20", interpolation="nearest")
     ax.axis("off")
+    if blobs:
+        for i, b in enumerate(blobs):
+            y, x = b["centroid"]
+            ax.annotate(f"blob_{i}", (x, y), color="white", fontsize=7, fontweight="bold",
+                        ha="center", va="center",
+                        bbox=dict(boxstyle="round,pad=0.15", facecolor="black", alpha=0.6, edgecolor="none"))
     fig.tight_layout(pad=0)
     buf = io.BytesIO()
     fig.savefig(buf, format="png", bbox_inches="tight", pad_inches=0)
@@ -297,12 +327,22 @@ class VisionToolsAgent(ToolsAgent):
             visited = "visited" if (b["color"], b["bbox"][0], b["bbox"][2]) in self.visited_blob_keys else "unvisited"
             blob_lines.append(f"{bid}: color={b['color']} pos={b['centroid']} size={b['size']} ({visited})")
         blob_lines = blob_lines or ["(none detected)"]
+        structural_lines = _structural_fact_lines(blobs)
 
         if not self.scene_notes and self.eyes_call_count < MAX_EYES_CALLS:
             self.eyes_call_count += 1
             try:
-                image_b64 = _grid_to_image_b64(grid)
-                self.scene_notes = _query_eyes(image_b64, blob_lines)
+                image_b64 = _grid_to_image_b64(grid, blobs)
+                # structural facts (e.g. "blob_2/blob_3 are one bar split by blob_7")
+                # are GIVEN, computed exactly from positions -- pass them alongside
+                # the object list so Gemma doesn't waste effort re-guessing (and
+                # getting wrong, see llm_relay_agent_experiments memory 2026-09-04)
+                # something code already knows for certain.
+                eyes_lines = list(blob_lines)
+                if structural_lines:
+                    eyes_lines.append("Also already computed, certain (not guesses):")
+                    eyes_lines.extend(structural_lines)
+                self.scene_notes = _query_eyes(image_b64, eyes_lines)
             except Exception as e:
                 print(f"[VisionToolsAgent] eyes query failed: {e!r}")
                 self.scene_notes = "(vision module unavailable this run)"
@@ -331,7 +371,9 @@ class VisionToolsAgent(ToolsAgent):
             f"Your notes from earlier turns:\n{self.brain_notes or '(none yet -- this is your first consult this game)'}\n\n"
             f"Movement laws discovered so far:\n{self._movement_summary(legal_names)}\n\n"
             f"Vision module's scene notes:\n{self.scene_notes or '(not available this run)'}\n\n"
-            f"Landmarks visible now:\n" + "\n".join(blob_lines) + "\n\n"
+            f"Landmarks visible now:\n" + "\n".join(blob_lines) + "\n\n" +
+            (f"Structural facts computed exactly from positions (not guesses):\n"
+             + "\n".join(structural_lines) + "\n\n" if structural_lines else "") +
             f"Effects discovered so far:\n" + "\n".join(effects_lines) + "\n\n"
             f"Available actions: {', '.join(legal_names)}\n"
             f"Which landmark should you move toward next, or which action should you try directly?"

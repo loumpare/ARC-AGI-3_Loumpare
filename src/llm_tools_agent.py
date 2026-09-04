@@ -337,6 +337,88 @@ def _bbox_overlaps_or_adjacent(b1: tuple, b2: tuple, margin: int = 1) -> bool:
                 c1a + margin < c0b or c0a - margin > c1b)
 
 
+INTERRUPTED_GAP_MAX = 6  # max gap (pixels) between two same-color blobs for them to be
+                          # considered "the same object, interrupted" -- see
+                          # _detect_interrupted_pairs
+
+
+def _detect_interrupted_pairs(blobs: list[dict]) -> list[dict]:
+    """Pure geometry, no vision/LLM needed: two blobs of the SAME color that sit
+    almost end-to-end (small gap, aligned on one axis) with a THIRD,
+    differently-colored blob sitting in that gap are very likely ONE object
+    interrupted by the other (e.g. a bar with a position marker on it), not two
+    independent objects. This is exactly vc33's real structure (confirmed
+    2026-09-04 by direct inspection: a horizontal gray bar cut in two by a
+    purple position marker sitting between the halves) -- Gemma and Qwen2.5-VL
+    both got this wrong when asked to infer it visually (see
+    llm_relay_agent_experiments memory), even with blob ids drawn on the image.
+    Since it's exact geometry (bounding boxes the code already has), there's no
+    reason to make a vision model guess it -- compute and state it as fact.
+    Returns a list of {blob_a, blob_b, interrupter, gap_size} dicts, indices
+    into the input `blobs` list."""
+    results = []
+    by_color: dict[int, list[int]] = {}
+    for i, b in enumerate(blobs):
+        by_color.setdefault(b["color"], []).append(i)
+
+    for color, idxs in by_color.items():
+        if len(idxs) < 2:
+            continue
+        for x in range(len(idxs)):
+            for y in range(x + 1, len(idxs)):
+                ia, ib = idxs[x], idxs[y]
+                ar0, ar1, ac0, ac1 = blobs[ia]["bbox"]
+                br0, br1, bc0, bc1 = blobs[ib]["bbox"]
+
+                row_overlap = min(ar1, br1) - max(ar0, br0)
+                col_overlap = min(ac1, bc1) - max(ac0, bc0)
+
+                if row_overlap >= 0 and (ac1 < bc0 or bc1 < ac0):
+                    # same row band, separated along columns -- gap is between them
+                    gap_lo, gap_hi = (ac1, bc0) if ac1 < bc0 else (bc1, ac0)
+                    band_lo, band_hi = max(ar0, br0), min(ar1, br1)
+                    axis = "col"
+                elif col_overlap >= 0 and (ar1 < br0 or br1 < ar0):
+                    # same column band, separated along rows -- gap is between them
+                    gap_lo, gap_hi = (ar1, br0) if ar1 < br0 else (br1, ar0)
+                    band_lo, band_hi = max(ac0, bc0), min(ac1, bc1)
+                    axis = "row"
+                else:
+                    continue  # not aligned end-to-end on either axis
+
+                gap_size = gap_hi - gap_lo
+                if gap_size <= 0 or gap_size > INTERRUPTED_GAP_MAX:
+                    continue
+
+                for k, c in enumerate(blobs):
+                    if c["color"] == color:
+                        continue
+                    cr0, cr1, cc0, cc1 = c["bbox"]
+                    if axis == "col":
+                        in_gap = cc0 <= gap_hi and cc1 >= gap_lo and cr0 <= band_hi and cr1 >= band_lo
+                    else:
+                        in_gap = cr0 <= gap_hi and cr1 >= gap_lo and cc0 <= band_hi and cc1 >= band_lo
+                    if in_gap:
+                        results.append({"blob_a": ia, "blob_b": ib, "interrupter": k, "gap_size": gap_size})
+                        break
+    return results
+
+
+def _structural_fact_lines(blobs: list[dict]) -> list[str]:
+    """Renders _detect_interrupted_pairs's output as prompt-ready fact lines,
+    shared by ToolsAgent and VisionToolsAgent so both state this as a GIVEN
+    fact rather than asking a brain/vision model to infer it (see
+    _detect_interrupted_pairs's docstring)."""
+    lines = []
+    for pair in _detect_interrupted_pairs(blobs):
+        lines.append(
+            f"- blob_{pair['blob_a']} and blob_{pair['blob_b']} (same color) are very likely ONE "
+            f"object, split by blob_{pair['interrupter']} sitting in the small gap ({pair['gap_size']}px) "
+            f"between them -- e.g. a bar/track with a position marker on it. Computed exactly from "
+            f"positions, not a guess.")
+    return lines
+
+
 SHIFT_THRESHOLD = 2.5  # minimum centroid shift (pixels) to count as "actually moved", filters
                         # out sub-pixel labeling-order noise from colors shared by static decor
 
@@ -917,6 +999,7 @@ class ToolsAgent(Agent):
                 status = "unvisited"
             blob_lines.append(f"{bid}: color={b['color']} pos={b['centroid']} size={b['size']} ({status})")
         blob_lines = blob_lines or ["(none detected)"]
+        structural_lines = _structural_fact_lines(blobs)
 
         effects_lines = []
         for e in self.effects_log:
@@ -941,7 +1024,9 @@ class ToolsAgent(Agent):
             f"{position_line}\n\n"
             f"Your notes from earlier turns:\n{self.brain_notes or '(none yet -- this is your first consult this game)'}\n\n"
             f"Movement laws discovered so far:\n{self._movement_summary(legal_names)}\n\n"
-            f"Landmarks visible now:\n" + "\n".join(blob_lines) + "\n\n"
+            f"Landmarks visible now:\n" + "\n".join(blob_lines) + "\n\n" +
+            (f"Structural facts computed exactly from positions (not guesses):\n"
+             + "\n".join(structural_lines) + "\n\n" if structural_lines else "") +
             f"Effects discovered so far:\n" + "\n".join(effects_lines) + "\n\n"
             f"Available actions: {', '.join(legal_names)}\n"
             f"Which landmark should you move toward next, or which action should you try directly?"
