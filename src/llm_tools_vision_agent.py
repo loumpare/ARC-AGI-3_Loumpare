@@ -49,6 +49,7 @@ from llm_tools_agent import (
     ACTION_NAMES,
     MAX_BRAIN_CALLS,
     OLLAMA_URL,
+    STUCK_MAX_DISTINCT_BBOX,
     ToolsAgent,
     _bbox_centroid,
     _bfs_path,
@@ -409,6 +410,9 @@ class VisionToolsAgent(ToolsAgent):
             self.self_bbox = None
             self.current_path = []
             self.current_goal_key = None
+            self.current_goal_bbox = None  # ported 2026-09-05, see pending_arrival_check below
+            self.pending_arrival_check = None
+            self.recent_action_log.clear()
             return GameAction.RESET
 
         legal = [a for a in latest_frame.available_actions if a in _CLICK_ACTION_NAMES]
@@ -426,11 +430,62 @@ class VisionToolsAgent(ToolsAgent):
             # could permanently lose the only description this game ever gets once
             # the budget is spent. A slightly-stale description from an earlier
             # level is still more useful context than none.
+            self.pending_arrival_check = None  # ported 2026-09-05 -- see llm_tools_agent's
+            self.recent_action_log.clear()      # identical reset, same reasoning (new level,
+                                                 # any in-flight check/streak is stale)
         self.prev_levels_completed = latest_frame.levels_completed
         self._update_from_last_transition(grid)
 
+        if not level_changed:
+            # PORTED 2026-09-05 from llm_tools_agent.ToolsAgent (added there 2026-09-04,
+            # never mirrored here until a real 4-config vision comparison showed all
+            # four configs stuck in the identical ping-pong loop -- see
+            # llm_relay_agent_experiments memory). This class's _choose_action_impl is a
+            # full override, not an extension, so base-class fixes never propagated here
+            # automatically -- confirmed the hard way via an instrumented ls20 replay:
+            # 60/145 turns (41%) were spent re-targeting ls20's own draining step-budget
+            # bar (rows 61-62) as a "new" landmark every tick it shrank, immediately
+            # failing BFS (not walkable) and falling back to a round-robin
+            # ACTION1->2->3->4->1 cycle -- exactly the reported "haut bas gauche droite"
+            # loop, on every one of the 4 compared configs since they all share this
+            # method. See the _find_blobs call below for the actual missing-exclusion
+            # half of this fix.
+            if self.pending_arrival_check is not None:
+                arrived = False
+                if self.self_bbox is not None:
+                    r, c = _bbox_centroid(self.self_bbox)
+                    tr0, tr1, tc0, tc1 = self.pending_arrival_check
+                    arrived = tr0 - 2 <= r <= tr1 + 2 and tc0 - 2 <= c <= tc1 + 2
+                if arrived:
+                    self.goal_fail_count = 0
+                    if self.current_goal_key is not None:
+                        self.visited_blob_keys.add(self.current_goal_key)
+                else:
+                    self.goal_fail_count += 1
+                self.pending_arrival_check = None
+
+            if self.self_colors and self.prev_action_name is not None:
+                self.recent_action_log.append((self.prev_action_name, self.self_bbox))
+                if (len(self.recent_action_log) == self.recent_action_log.maxlen
+                        and len({e[1] for e in self.recent_action_log}) <= STUCK_MAX_DISTINCT_BBOX):
+                    if self.current_goal_key is not None:
+                        self.blob_attempt_count[self.current_goal_key] = (
+                            self.blob_attempt_count.get(self.current_goal_key, 0) + 1)
+                        if self.blob_attempt_count[self.current_goal_key] >= 3:
+                            self.visited_blob_keys.add(self.current_goal_key)
+                    self.current_path = []
+                    self.current_goal_key = None
+                    self.current_goal_bbox = None
+                    self.goal_fail_count = max(self.goal_fail_count, 1)
+                    self.recent_action_log.clear()
+
         bulk = _bulk_colors(grid)
-        blobs = _find_blobs(grid, bulk | self.self_colors | self.attached_colors)
+        # `| self.confirmed_bar_colors` was the missing half of the port above: this
+        # attribute was already being computed correctly (inherited
+        # _update_from_last_transition fills it unconditionally) but never actually
+        # consulted here, so a draining bar/gauge always looked like a fresh landmark
+        # regardless of the fix above.
+        blobs = _find_blobs(grid, bulk | self.self_colors | self.attached_colors | self.confirmed_bar_colors)
 
         # periodic model check-in, independent of bootstrap/goal state -- see
         # MODEL_TRIGGER_INTERVAL's comment: without this, a game where
@@ -504,7 +559,16 @@ class VisionToolsAgent(ToolsAgent):
                 target = _closest_blob(unvisited, self_pos) or _closest_blob(blobs, self_pos)
             if target is not None:
                 self.current_goal_key = (target["color"], target["bbox"][0], target["bbox"][2])
-                self.visited_blob_keys.add(self.current_goal_key)
+                self.current_goal_bbox = target["bbox"]  # ported 2026-09-05, see pending_arrival_check
+                # PORTED 2026-09-05 (see llm_tools_agent, 2026-09-04): NOT marked visited
+                # here anymore on mere selection -- only on confirmed arrival below, via
+                # pending_arrival_check. blob_attempt_count is the bounded-retry safety
+                # net so a target BFS can never actually reach still gets excluded after
+                # 3 tries instead of looping forever.
+                self.blob_attempt_count[self.current_goal_key] = (
+                    self.blob_attempt_count.get(self.current_goal_key, 0) + 1)
+                if self.blob_attempt_count[self.current_goal_key] >= 3:
+                    self.visited_blob_keys.add(self.current_goal_key)
                 path = _bfs_path(grid, self_pos_int, target["bbox"], self.blocked_values, self.action_deltas)
                 self.current_path = path or []
             if not self.current_path:
@@ -519,6 +583,8 @@ class VisionToolsAgent(ToolsAgent):
         action = self.current_path.pop(0)
         self.prev_grid = grid
         self.prev_action_name = action.name
-        if not self.current_path:
-            self.goal_fail_count = 0
+        if not self.current_path and self.current_goal_bbox is not None:
+            # ported 2026-09-05 -- defer the arrival verdict to next turn's top-of-call
+            # resolution block instead of declaring "arrived" unconditionally right here
+            self.pending_arrival_check = self.current_goal_bbox
         return action
