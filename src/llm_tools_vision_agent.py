@@ -47,6 +47,7 @@ from arcengine import FrameData, GameAction, GameState
 from llm_tools_agent import (
     ACTION_NAME_TO_ENUM,
     ACTION_NAMES,
+    EXTRA_STEP_BUDGET,
     MAX_BRAIN_CALLS,
     OLLAMA_URL,
     STUCK_MAX_DISTINCT_BBOX,
@@ -404,6 +405,28 @@ class VisionToolsAgent(ToolsAgent):
     def _choose_action_impl(
         self, frames: list[FrameData], latest_frame: FrameData
     ) -> GameAction:
+        # ====================================================================
+        # REPÈRE FR -- C'EST ICI la boucle de décision/déplacement pour
+        # VisionToolsAgent, ET pour UnifiedVisionAgent (qui hérite cette
+        # méthode SANS la réécrire -- voir scratchpad/vision_compare/
+        # unified_agent.py, il ne modifie QUE _consult_models plus haut dans
+        # ce fichier, pas le déplacement). C'est une réécriture COMPLÈTE de
+        # ToolsAgent._choose_action_impl (src/llm_tools_agent.py, ~ligne 1151)
+        # -- pas un appel à la version parente -- donc tout correctif fait sur
+        # la version de base doit être reporté ici À LA MAIN (c'est justement
+        # le bug trouvé le 2026-09-05 : le correctif anti-boucle du
+        # 2026-09-04 n'avait jamais été copié ici).
+        #
+        # Déroulé d'un tour :
+        #   1. RESET/GAME_OVER -> on relance
+        #   2. calcul des blobs (objets détectés) via _find_blobs
+        #   3. si le joueur n'est pas encore identifié -> phase bootstrap
+        #      (self.self_colors vide, voir plus bas)
+        #   4. sinon -> si un chemin est déjà en cours (self.current_path),
+        #      on continue de le suivre ; sinon on consulte le brain/vision
+        #      (_consult_models) pour choisir une nouvelle cible, puis
+        #      _bfs_path (src/llm_tools_agent.py) calcule le chemin.
+        # ====================================================================
         if latest_frame.state in (GameState.NOT_PLAYED, GameState.GAME_OVER):
             self.prev_grid = None
             self.prev_action_name = None
@@ -412,6 +435,9 @@ class VisionToolsAgent(ToolsAgent):
             self.current_goal_key = None
             self.current_goal_bbox = None  # ported 2026-09-05, see pending_arrival_check below
             self.pending_arrival_check = None
+            self.pending_arrival_action = None
+            self.extra_step_budget = 0
+            self.extra_step_action = None
             self.recent_action_log.clear()
             return GameAction.RESET
 
@@ -431,8 +457,10 @@ class VisionToolsAgent(ToolsAgent):
             # the budget is spent. A slightly-stale description from an earlier
             # level is still more useful context than none.
             self.pending_arrival_check = None  # ported 2026-09-05 -- see llm_tools_agent's
-            self.recent_action_log.clear()      # identical reset, same reasoning (new level,
-                                                 # any in-flight check/streak is stale)
+            self.pending_arrival_action = None  # identical resets, same reasoning (new level,
+            self.extra_step_budget = 0          # any in-flight check/streak/retry-budget is stale
+            self.extra_step_action = None
+            self.recent_action_log.clear()
         self.prev_levels_completed = latest_frame.levels_completed
         self._update_from_last_transition(grid)
 
@@ -460,9 +488,18 @@ class VisionToolsAgent(ToolsAgent):
                     self.goal_fail_count = 0
                     if self.current_goal_key is not None:
                         self.visited_blob_keys.add(self.current_goal_key)
+                    # ported 2026-09-05 -- see EXTRA_STEP_BUDGET's comment in
+                    # llm_tools_agent.py: arrival confirmed but no level transition
+                    # followed, so try continuing the same action a few more times
+                    # before picking a brand new target (many ARC mechanics need
+                    # walking PAST a marker's edge, not just touching it).
+                    if not level_changed and self.pending_arrival_action is not None:
+                        self.extra_step_budget = EXTRA_STEP_BUDGET
+                        self.extra_step_action = self.pending_arrival_action
                 else:
                     self.goal_fail_count += 1
                 self.pending_arrival_check = None
+                self.pending_arrival_action = None
 
             if self.self_colors and self.prev_action_name is not None:
                 self.recent_action_log.append((self.prev_action_name, self.self_bbox))
@@ -526,6 +563,14 @@ class VisionToolsAgent(ToolsAgent):
         self.prev_self_pos = self_pos
         self_pos_int = (int(round(self_pos[0])), int(round(self_pos[1]))) if self_pos else (0, 0)
 
+        # ported 2026-09-05 -- see EXTRA_STEP_BUDGET's comment in llm_tools_agent.py
+        if not self.current_path and self.extra_step_budget > 0 and self.extra_step_action in legal_names:
+            self.extra_step_budget -= 1
+            self.tried_actions.add(self.extra_step_action)
+            self.prev_grid = grid
+            self.prev_action_name = self.extra_step_action
+            return _CLICK_ACTION_NAME_TO_ENUM[self.extra_step_action]
+
         if not self.current_path:
             # NOTE: this consult must NOT be gated on `if blobs:` -- empty blobs
             # (e.g. ka59: pushable objects fragment past MAX_FRAGMENTS_PER_COLOR
@@ -587,4 +632,5 @@ class VisionToolsAgent(ToolsAgent):
             # ported 2026-09-05 -- defer the arrival verdict to next turn's top-of-call
             # resolution block instead of declaring "arrived" unconditionally right here
             self.pending_arrival_check = self.current_goal_bbox
+            self.pending_arrival_action = action.name  # see extra_step_budget
         return action

@@ -212,6 +212,9 @@ STUCK_WINDOW = 6      # if self's position stays within STUCK_MAX_DISTINCT_BBOX 
                        # independent of what causes the specific desync/re-attempt.
 STUCK_MAX_DISTINCT_BBOX = 2
 
+EXTRA_STEP_BUDGET = 2  # see pending_arrival_action's comment: how many extra repeats of the
+                        # arrival-causing action to try before giving up on "walk further in"
+
 MODEL_TRIGGER_INTERVAL = 15  # periodic brain check-in, independent of bootstrap/goal state --
                               # ported from llm_tools_vision_agent.py's "shared" mode (empirically
                               # confirmed the best of 3 tested variants there, see
@@ -330,6 +333,52 @@ def _bar_fragment_counts(grid: np.ndarray, exclude_colors: set[int]) -> dict[int
         if n > MAX_FRAGMENTS_PER_COLOR:
             counts[color] = n
     return counts
+
+
+EDGE_MARGIN = 2        # a blob within this many pixels of a grid border is "pinned to the edge"
+BAR_ASPECT_RATIO = 5   # width >= 5x height (or vice versa) is "long and thin" -- a HUD strip shape
+
+
+def _edge_aspect_bar_colors(grid: np.ndarray, exclude_colors: set[int]) -> set[int]:
+    """Second, COMPLEMENTARY HUD-bar signal to _bar_fragment_counts, added
+    2026-09-05 after a real instrumented replay showed ls20's own step-budget
+    bar looping an agent for ~20 turns despite confirmed_bar_colors already
+    being wired in (see llm_relay_agent_experiments memory) -- root cause: that
+    specific bar drains as ONE solid, unfragmented blob (never more than
+    MAX_FRAGMENTS_PER_COLOR pieces), so the fragment-count check never once
+    excluded it, and its shifting bbox (1px narrower every drain tick) also
+    defeated the visited-landmark/attempt-count dedup, since each tick looked
+    like a "new" object.
+
+    This catches the complementary case (solid, non-fragmented bars) using a
+    genuinely different, purely geometric signal, verified against the real
+    offending bar before trusting it: measured bbox was 1px from the bottom
+    edge, 34px wide x 2px tall (17:1 aspect ratio) -- exactly what a HUD strip
+    looks like in virtually any game's rendering convention, and NOT a shape
+    real gameplay landmarks tend to take (pinned flush to a border AND
+    extremely thin in one dimension). Position+shape based, not fragment-count
+    based, so it doesn't duplicate _bar_fragment_counts -- it fills the gap
+    that heuristic structurally cannot see."""
+    h, w = grid.shape
+    found = set()
+    for color in np.unique(grid):
+        color = int(color)
+        if color in exclude_colors:
+            continue
+        mask = grid == color
+        labeled, n = ndimage.label(mask)
+        if n != 1:
+            continue  # fragmented bars are _bar_fragment_counts's job; this
+                       # function only needs to catch the SOLID single-blob case
+        ys, xs = np.where(labeled == 1)
+        r0, r1, c0, c1 = int(ys.min()), int(ys.max()), int(xs.min()), int(xs.max())
+        touches_edge = (r0 <= EDGE_MARGIN or r1 >= h - 1 - EDGE_MARGIN or
+                        c0 <= EDGE_MARGIN or c1 >= w - 1 - EDGE_MARGIN)
+        height, width = r1 - r0 + 1, c1 - c0 + 1
+        extreme_aspect = width >= BAR_ASPECT_RATIO * height or height >= BAR_ASPECT_RATIO * width
+        if touches_edge and extreme_aspect:
+            found.add(color)
+    return found
 
 
 def _bbox_overlaps_or_adjacent(b1: tuple, b2: tuple, margin: int = 1) -> bool:
@@ -480,18 +529,35 @@ def _closest_blob(blobs: list[dict], pos: tuple[float, float]) -> dict | None:
     return min(blobs, key=lambda b: abs(b["centroid"][0] - pos[0]) + abs(b["centroid"][1] - pos[1]))
 
 
+# ============================================================================
+# FONCTION DE DÉPLACEMENT PRINCIPALE (partagée par TOUS les agents, y compris
+# les variantes "unified" -- UnifiedVisionAgent n'a pas sa propre logique de
+# déplacement, elle utilise celle-ci via héritage, voir VisionToolsAgent plus
+# bas dans src/llm_tools_vision_agent.py).
+# ============================================================================
 def _bfs_path(grid: np.ndarray, start: tuple[int, int], target_bbox: tuple,
               blocked_values: set[int], deltas: dict[str, tuple[int, int]]) -> list[GameAction] | None:
-    """BFS in raw pixel space using only the movement deltas learned so far."""
+    """BFS (parcours en largeur) dans l'espace des pixels bruts, en utilisant
+    UNIQUEMENT les déplacements ("deltas") appris jusqu'ici pour chaque
+    action -- pas de règle codée en dur, seulement ce qui a été observé
+    empiriquement (voir _update_from_last_transition, qui remplit `deltas`).
+    Retourne la liste d'actions à exécuter pour atteindre `target_bbox`, ou
+    None si aucun chemin n'est trouvé avec les lois de mouvement connues."""
     if not deltas:
-        return None
+        return None  # aucune loi de mouvement apprise encore -- impossible de planifier
 
     def overlaps_target(pos):
+        # vrai si la position `pos` touche (avec une marge de 2px) la bbox cible --
+        # c'est la règle "arrivé" utilisée PARTOUT dans le projet (voir aussi
+        # pending_arrival_check plus bas, qui réutilise exactement cette même règle)
         r, c = pos
         r0, r1, c0, c1 = target_bbox
         return r0 - 2 <= r <= r1 + 2 and c0 - 2 <= c <= c1 + 2
 
     def blocked_at(pos):
+        # vrai si la position est hors grille OU sur une couleur déjà identifiée
+        # comme un mur (blocked_values, appris par essai -- une action qui ne
+        # bouge pas self quand elle touche cette couleur)
         r, c = pos
         if r < 0 or c < 0 or r >= grid.shape[0] or c >= grid.shape[1]:
             return True
@@ -506,9 +572,10 @@ def _bfs_path(grid: np.ndarray, start: tuple[int, int], target_bbox: tuple,
     while bfs_queue:
         pos, path = bfs_queue.popleft()
         if overlaps_target(pos):
-            return path
+            return path  # trouvé ! on renvoie la séquence d'actions pour y arriver
         if len(path) >= 60:
-            continue
+            continue  # limite de profondeur -- évite une explosion combinatoire
+        # on essaie chaque action dont on connaît l'effet (delta = (dr, dc))
         for action_name, (dr, dc) in deltas.items():
             if action_name not in ACTION_NAME_TO_ENUM:
                 continue  # safety net: deltas should never contain ACTION6 (see
@@ -519,7 +586,7 @@ def _bfs_path(grid: np.ndarray, start: tuple[int, int], target_bbox: tuple,
                 continue
             visited.add(new_pos)
             bfs_queue.append((new_pos, path + [ACTION_NAME_TO_ENUM[action_name]]))
-    return None
+    return None  # aucun chemin trouvé avec les lois de mouvement actuelles
 
 
 def _query_brain(prompt: str, system_prompt: str = BRAIN_SYSTEM_PROMPT) -> str:
@@ -665,6 +732,17 @@ class MyAgent(Agent):
                                                            # the next call, once self_bbox reflects
                                                            # that action's real effect (see
                                                            # _update_from_last_transition timing)
+        self.pending_arrival_action: str | None = None  # the action that produced the arrival being
+                                                          # checked -- see extra_step_budget below
+        self.extra_step_budget = 0  # 2026-09-05: many ARC mechanics need walking PAST a marker's
+                                     # edge, not just touching it (e.g. ls20's own documented
+                                     # "touch the cross, then walk one tile further into the exit
+                                     # doorway" two-step mechanic) -- when an arrival is confirmed
+                                     # but no level transition follows, keep repeating the SAME
+                                     # action a few more times before giving up and picking a brand
+                                     # new target from scratch. Bounded (EXTRA_STEP_BUDGET) so a
+                                     # genuine dead end can't loop forever.
+        self.extra_step_action: str | None = None
         self.current_path: list[GameAction] = []
         self.recent_action_log: deque[tuple[str, tuple | None]] = deque(maxlen=STUCK_WINDOW)
         self.action_diff_stats: dict[str, dict] = {}  # per-action (n_tries, n_zero, total_diff) --
@@ -702,7 +780,19 @@ class MyAgent(Agent):
             return True
 
     def _update_from_last_transition(self, grid: np.ndarray) -> None:
-        """Pure code: figure out what moved, what blocked, what effects occurred."""
+        """Pure code: figure out what moved, what blocked, what effects occurred.
+
+        REPÈRE FR -- fonction appelée à CHAQUE tour, avant de décider la
+        prochaine action. C'est ici que sont apprises les "lois de mouvement"
+        (action_deltas : quelle action déplace le joueur de combien de
+        lignes/colonnes) utilisées ensuite par _bfs_path pour planifier un
+        chemin. Deux branches principales plus bas :
+          1. `if self.self_colors:` -- le joueur est DÉJÀ identifié -> on
+             mesure juste son déplacement réel et on met à jour/valide la loi
+             de mouvement de la dernière action.
+          2. `elif self.prev_action_name != "ACTION6":` -- le joueur n'est
+             PAS encore identifié (phase "bootstrap") -> on cherche quelle
+             couleur a le plus bougé pour deviner qui est "moi"."""
         if self.prev_grid is None or self.prev_action_name is None:
             return
 
@@ -737,6 +827,13 @@ class MyAgent(Agent):
         bar_counts_now = _bar_fragment_counts(grid, _bulk_colors(grid))
         self.confirmed_bar_colors |= set(bar_counts_now.keys())
 
+        # 2026-09-05: geometric HUD signal (edge-pinned + extreme aspect ratio),
+        # complementary to the fragment-count check above -- catches a SOLID
+        # (non-fragmented) draining bar the fragment-count check structurally
+        # cannot see. See _edge_aspect_bar_colors's docstring for the real
+        # instrumented case that motivated this.
+        self.confirmed_bar_colors |= _edge_aspect_bar_colors(grid, _bulk_colors(grid))
+
         # A second signal (pixel-count shrink over time) was tried here and REVERTED
         # (2026-09-04): ls20's real resource bar OSCILLATES (drains on steps, regrows
         # on pickups -- see the "resource_bar_grew" effect below), so tracking "ever
@@ -753,6 +850,10 @@ class MyAgent(Agent):
         teleported = False
 
         if self.self_colors:
+            # REPÈRE FR -- BRANCHE 1 : joueur déjà identifié (self.self_colors
+            # non vide). On mesure son déplacement réel depuis la dernière
+            # frame et on confirme/apprend la loi de mouvement de l'action
+            # jouée (self.action_deltas[nom_action] = (delta_ligne, delta_colonne)).
             # track position via a LOCAL window around the last known bbox, not a
             # global color mask -- a self color can be reused by unrelated static
             # decor elsewhere on the grid, which would dilute/corrupt the estimate.
@@ -853,6 +954,11 @@ class MyAgent(Agent):
                         if 0 <= dest[0] < self.prev_grid.shape[0] and 0 <= dest[1] < self.prev_grid.shape[1]:
                             self.blocked_values.add(int(self.prev_grid[dest]))
         elif self.prev_action_name != "ACTION6":
+            # REPÈRE FR -- BRANCHE 2 : phase "bootstrap", personne n'est encore
+            # identifié comme "moi". On regarde TOUTES les couleurs de la
+            # grille et on prend celle qui a le plus bougé entre les deux
+            # dernières frames -- si ce même (couleur, action, déplacement) se
+            # répète une 2e fois, on la déclare "moi" (self.self_colors).
             # bootstrap: among non-bulk colors present in both frames, pick whichever
             # shows the LARGEST raw-mask centroid shift, requiring it to clear a
             # threshold well above the sub-pixel noise a shared/split color can produce.
@@ -1159,6 +1265,9 @@ class MyAgent(Agent):
             self.current_goal_key = None
             self.current_goal_bbox = None
             self.pending_arrival_check = None
+            self.pending_arrival_action = None
+            self.extra_step_budget = 0
+            self.extra_step_action = None
             self.recent_action_log.clear()
             self.direct_action_repeat_remaining = 0  # don't carry a pre-reset commitment across
             self.prev_state_sig = None  # stale post-reset; state_graph itself is NOT cleared --
@@ -1191,6 +1300,9 @@ class MyAgent(Agent):
             # arrival check or same-action streak was measuring the OLD level and
             # would be comparing apples to oranges against the new one
             self.pending_arrival_check = None
+            self.pending_arrival_action = None
+            self.extra_step_budget = 0
+            self.extra_step_action = None
             self.recent_action_log.clear()
         self.prev_levels_completed = latest_frame.levels_completed
         self._update_from_last_transition(grid)
@@ -1226,9 +1338,20 @@ class MyAgent(Agent):
                     self.goal_fail_count = 0
                     if self.current_goal_key is not None:
                         self.visited_blob_keys.add(self.current_goal_key)
+                    # 2026-09-05: arrival confirmed but the level didn't transition --
+                    # many ARC mechanics need self to walk PAST a marker's edge, not
+                    # just touch its bounding box (see EXTRA_STEP_BUDGET's comment).
+                    # Give continuing in the same direction a bounded number of tries
+                    # BEFORE falling through to picking a brand new target from
+                    # scratch -- generic ("keep going the way you were already
+                    # heading"), no assumption about which game or which marker.
+                    if not level_changed and self.pending_arrival_action is not None:
+                        self.extra_step_budget = EXTRA_STEP_BUDGET
+                        self.extra_step_action = self.pending_arrival_action
                 else:
                     self.goal_fail_count += 1
                 self.pending_arrival_check = None
+                self.pending_arrival_action = None
 
             if self.self_colors and self.prev_action_name is not None:
                 self.recent_action_log.append((self.prev_action_name, self.self_bbox))
@@ -1339,6 +1462,18 @@ class MyAgent(Agent):
         self.prev_self_pos = self_pos
         self_pos_int = (int(round(self_pos[0])), int(round(self_pos[1]))) if self_pos else (0, 0)
 
+        # 2026-09-05: "walk past the marker" retry -- see extra_step_budget's
+        # comment. Takes priority over picking a brand new goal, but only for a
+        # bounded number of tries, and only while there's no other in-flight
+        # plan already running (current_path empty -- an active plan toward
+        # something else should never get interrupted by this).
+        if not self.current_path and self.extra_step_budget > 0 and self.extra_step_action in legal_names:
+            self.extra_step_budget -= 1
+            self.tried_actions.add(self.extra_step_action)
+            self.prev_grid = grid
+            self.prev_action_name = self.extra_step_action
+            return _CLICK_ACTION_NAME_TO_ENUM[self.extra_step_action]
+
         # need a new goal?
         if not self.current_path:
             # only ask Qwen on a FRESH need (goal_fail_count==0: either the very
@@ -1418,4 +1553,5 @@ class MyAgent(Agent):
             # pending_arrival_check's comment in __init__ and the resolution logic
             # in _choose_action_impl right after _update_from_last_transition
             self.pending_arrival_check = self.current_goal_bbox
+            self.pending_arrival_action = action.name  # see extra_step_budget
         return action
