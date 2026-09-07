@@ -37,6 +37,7 @@ from scipy import ndimage
 
 from agents.agent import Agent
 
+from shared_game_memory import get_shared_memory
 from state_graph import StateGraph, state_signature
 
 # Two inference backends for the "brain" (Qwen2.5-7B), picked automatically:
@@ -1150,6 +1151,28 @@ class ToolsAgent(Agent):
                               f"a button/toggle/selector rather than movement)")
         return "\n".join(lines) if lines else "(no actions tried yet)"
 
+    def _sync_shared_action_memory(self, legal_names: list[str]) -> str:
+        """PUBLISH this game's own confirmed action roles to the process-wide
+        SharedGameMemory (see shared_game_memory.py, one instance per Python
+        process -- Swarm runs one Thread per game, all in the same process),
+        then READ back a digest of what OTHER games running this session found
+        for any action this game hasn't confirmed itself yet. Read strictly
+        excludes anything already in action_deltas/action_diff_stats for THIS
+        game -- a game's own confirmed facts always take priority over any
+        cross-game hint, this can only fill in the unknowns."""
+        mem = get_shared_memory()
+        known = set(self.action_deltas)
+        for name in legal_names:
+            if name in self.action_deltas:
+                mem.report_role(id(self), name, "movement")
+                continue
+            stats = self.action_diff_stats.get(name)
+            if stats and stats["n_tries"] >= 2 and stats["n_zero"] < stats["n_tries"]:
+                mem.report_role(id(self), name, "nonspatial")
+                known.add(name)  # has its own local evidence -- don't also show a cross-game hint for it
+        digest = mem.digest(legal_names, known)
+        return digest or "(no data from other games yet this session)"
+
     def _periodic_due(self) -> bool:
         # ported from llm_tools_vision_agent.py's "shared" mode -- see MODEL_TRIGGER_INTERVAL
         return (self.action_counter > 0 and self.action_counter % MODEL_TRIGGER_INTERVAL == 0
@@ -1197,10 +1220,13 @@ class ToolsAgent(Agent):
                           "tracked as \"you\" despite trying multiple actions (see movement laws "
                           "below). \"Move toward a landmark\" is likely not applicable here.")
 
+        cross_game_hints = self._sync_shared_action_memory(legal_names)
         prompt = (
             f"{position_line}\n\n"
             f"Your notes from earlier turns:\n{self.brain_notes or '(none yet -- this is your first consult this game)'}\n\n"
             f"Movement laws discovered so far:\n{self._movement_summary(legal_names)}\n\n"
+            f"Hints from OTHER games played this session (same action vocabulary, "
+            f"DIFFERENT game -- may not apply here, treat as a weak prior only):\n{cross_game_hints}\n\n"
             f"Landmarks visible now:\n" + "\n".join(blob_lines) + "\n\n" +
             (f"Structural facts computed exactly from positions (not guesses):\n"
              + "\n".join(structural_lines) + "\n\n" if structural_lines else "") +
@@ -1492,36 +1518,37 @@ class ToolsAgent(Agent):
         bulk = _bulk_colors(grid)
         blobs = _find_blobs(grid, bulk | self.self_colors | self.attached_colors | self.confirmed_bar_colors)
 
+        # Generic clustered state-graph (see state_graph.py): observe EVERY
+        # transition every turn, regardless of self-ID/branch -- moved out of the
+        # bootstrap-only block 2026-09-07 (was previously not recorded at all once
+        # self got identified, so a win discovered by the main BFS/brain path could
+        # never be replayed later even within the same episode, e.g. after a
+        # calibration/arrival-retry RESET revisits an earlier state). Marking a
+        # goal signature and finding a path to it is purely additive -- a no-op
+        # until some win has actually happened on this game (find_path returns
+        # None with an empty goal set), so this cannot make an already-working
+        # game worse, only give it a shot at reusing a win once one has occurred.
+        sig = state_signature(blobs)
+        if self.prev_state_sig is not None and self.prev_action_name is not None:
+            self.state_graph.record_transition(self.prev_state_sig, self.prev_action_name, sig)
+        if level_changed:
+            self.state_graph.mark_goal(sig)
+            self.state_graph_path = []  # a level transition invalidates any in-flight plan
+        self.prev_state_sig = sig
+
+        if not self.state_graph_path:
+            self.state_graph_path = self.state_graph.find_path(sig) or []
+        if self.state_graph_path:
+            chosen_name = self.state_graph_path.pop(0)
+            if chosen_name in legal_names:
+                self.tried_actions.add(chosen_name)
+                self.prev_grid = grid
+                self.prev_action_name = chosen_name
+                return _CLICK_ACTION_NAME_TO_ENUM[chosen_name]
+            self.state_graph_path = []  # stale (action no longer legal) -- replan next time
+
         # bootstrap phase: self not identified yet -- cycle through actions to seed movement data
         if not self.self_colors:
-            # generic clustered state-graph (see state_graph.py): observe every
-            # transition regardless of which sub-branch below ends up choosing the
-            # action, and if a path to a previously-discovered goal state (a
-            # levels_completed increase) is known, follow it -- takes priority
-            # over everything else here since it's the only option backed by an
-            # actual observed win, not a guess. A no-op until the FIRST real win
-            # on this game (find_path returns None with an empty goal set), so
-            # this is purely additive: it cannot make an already-tried game worse,
-            # only give it a shot at reusing a win once one has ever happened.
-            sig = state_signature(blobs)
-            if self.prev_state_sig is not None and self.prev_action_name is not None:
-                self.state_graph.record_transition(self.prev_state_sig, self.prev_action_name, sig)
-            if level_changed:
-                self.state_graph.mark_goal(sig)
-                self.state_graph_path = []  # a level transition invalidates any in-flight plan
-            self.prev_state_sig = sig
-
-            if not self.state_graph_path:
-                self.state_graph_path = self.state_graph.find_path(sig) or []
-            if self.state_graph_path:
-                chosen_name = self.state_graph_path.pop(0)
-                if chosen_name in legal_names:
-                    self.tried_actions.add(chosen_name)
-                    self.prev_grid = grid
-                    self.prev_action_name = chosen_name
-                    return _CLICK_ACTION_NAME_TO_ENUM[chosen_name]
-                self.state_graph_path = []  # stale (action no longer legal) -- replan next time
-
             non_click_names = [n for n in legal_names if n != "ACTION6"]
             non_click_tried = all(n in self.tried_actions for n in non_click_names)
             if "ACTION6" in legal_names and (not non_click_names or non_click_tried):
@@ -1588,6 +1615,26 @@ class ToolsAgent(Agent):
 
         # need a new goal?
         if not self.current_path:
+            if self.direct_action_repeat_remaining > 0 and self.direct_action_repeat_name in legal_names:
+                # mid-commitment to a brain-suggested non-spatial action -- give it
+                # DIRECT_ACTION_REPEAT tries before re-consulting, same pattern the
+                # bootstrap branch above already uses (see DIRECT_ACTION_REPEAT).
+                # Ported here 2026-09-07: this main branch previously tried a
+                # direct_action_name suggestion exactly ONCE, then immediately
+                # re-entered this block next turn (goal_fail_count still 0 -> a
+                # fresh brain call every single turn) -- confirmed via a 13-game
+                # benchmark that this burned the whole per-game brain-call budget
+                # testing single untested actions one at a time (cd82/re86/sk48/
+                # tr87 all hit the cap well before 150 actions, then degraded to
+                # blind landmark-picking for the rest of the game). Many puzzle
+                # mechanics (toggles, state cycles) need several presses of the
+                # SAME action to show an effect at all, not just one.
+                self.direct_action_repeat_remaining -= 1
+                chosen_name = self.direct_action_repeat_name
+                self.tried_actions.add(chosen_name)
+                self.prev_grid = grid
+                self.prev_action_name = chosen_name
+                return _CLICK_ACTION_NAME_TO_ENUM[chosen_name]
             # only ask Qwen on a FRESH need (goal_fail_count==0: either the very
             # first goal, or the last one was actually reached) and under the
             # hard per-level call cap -- OR periodically regardless (see
@@ -1617,6 +1664,8 @@ class ToolsAgent(Agent):
                 # brain judged the mechanic isn't spatial pathing -- try its
                 # suggested action directly instead of routing through BFS
                 self.tried_actions.add(direct_action_name)
+                self.direct_action_repeat_name = direct_action_name
+                self.direct_action_repeat_remaining = DIRECT_ACTION_REPEAT - 1
                 self.prev_grid = grid
                 self.prev_action_name = direct_action_name
                 return _CLICK_ACTION_NAME_TO_ENUM[direct_action_name]
@@ -1626,6 +1675,8 @@ class ToolsAgent(Agent):
                              if (b["color"], b["bbox"][0], b["bbox"][2]) not in self.visited_blob_keys]
                 target = _closest_blob(unvisited, self_pos) or _closest_blob(blobs, self_pos)
             if target is not None:
+                self.direct_action_repeat_remaining = 0  # a fresh spatial plan supersedes any
+                                                           # stale non-spatial repeat commitment
                 self.current_goal_key = (target["color"], target["bbox"][0], target["bbox"][2])
                 self.current_goal_bbox = target["bbox"]  # see pending_arrival_check
                 # NOT marked visited here anymore (was: immediately on selection, even

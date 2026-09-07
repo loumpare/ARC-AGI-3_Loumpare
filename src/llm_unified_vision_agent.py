@@ -191,10 +191,13 @@ class UnifiedVisionAgent(VisionToolsAgent):
                           "tracked as \"you\" despite trying multiple actions.")
 
         image_b64 = _grid_to_image_b64(grid, blobs)
+        cross_game_hints = self._sync_shared_action_memory(legal_names)
         user_prompt = (
             f"{position_line}\n\n"
             f"Your notes from earlier turns:\n{self.brain_notes or '(none yet -- first consult this game)'}\n\n"
             f"Movement laws discovered so far:\n{self._movement_summary(legal_names)}\n\n"
+            f"Hints from OTHER games played this session (same action vocabulary, "
+            f"DIFFERENT game -- may not apply here, treat as a weak prior only):\n{cross_game_hints}\n\n"
             f"Landmarks visible now (also labeled blob_N on the image):\n" + "\n".join(blob_lines) + "\n\n" +
             (f"Structural facts computed exactly from positions (not guesses):\n"
              + "\n".join(structural_lines) + "\n\n" if structural_lines else "") +
