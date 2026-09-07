@@ -161,6 +161,9 @@ def _query_unified_bounded(image_b64: str, user_prompt: str, model_name: str, ti
 class UnifiedVisionAgent(VisionToolsAgent):
     UNIFIED_MODEL = "qwen3.8:latest"
     UNIFIED_TIMEOUT_S = 180
+    REFLECTION_MODEL = UNIFIED_MODEL  # this class's whole design is "one model does everything" --
+                                       # use it for the periodic trajectory reflection too, rather
+                                       # than VisionToolsAgent's default (its separate "eyes" model)
 
     def _consult_models(self, grid, blobs, legal_names, self_pos, counter_attr="brain_call_count"):
         id_map = {}
@@ -192,10 +195,12 @@ class UnifiedVisionAgent(VisionToolsAgent):
 
         image_b64 = _grid_to_image_b64(grid, blobs)
         cross_game_hints = self._sync_shared_action_memory(legal_names)
+        progress_signal = self._progress_signal_summary()
         user_prompt = (
             f"{position_line}\n\n"
             f"Your notes from earlier turns:\n{self.brain_notes or '(none yet -- first consult this game)'}\n\n"
             f"Movement laws discovered so far:\n{self._movement_summary(legal_names)}\n\n"
+            f"Progress signal (from actual gameplay, not a guess):\n{progress_signal}\n\n"
             f"Hints from OTHER games played this session (same action vocabulary, "
             f"DIFFERENT game -- may not apply here, treat as a weak prior only):\n{cross_game_hints}\n\n"
             f"Landmarks visible now (also labeled blob_N on the image):\n" + "\n".join(blob_lines) + "\n\n" +

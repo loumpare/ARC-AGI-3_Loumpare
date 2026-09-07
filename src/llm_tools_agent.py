@@ -241,6 +241,33 @@ STUCK_MAX_DISTINCT_BBOX = 2
 EXTRA_STEP_BUDGET = 2  # see pending_arrival_action's comment: how many extra repeats of the
                         # arrival-causing action to try before giving up on "walk further in"
 
+PROGRESS_SIG_WINDOW = 20   # how many recent state_signatures (see state_graph.py) to remember
+                            # for cycle/stall detection -- generic, code-only "are we actually
+                            # making progress" signal, added 2026-09-07 after a retrospective
+                            # multi-frame reflection test (results/reflection_20260907/) showed
+                            # the model's live turn-by-turn reasoning was fine in isolation but the
+                            # agent kept blindly re-cycling the same action loop (1-2-3-4-...,
+                            # RESET, repeat) with no way to notice it wasn't going anywhere --
+                            # every one of 4 stuck games examined showed this exact pattern. This
+                            # doesn't fix that by itself; it just makes the fact machine-visible so
+                            # the brain's prompt can say "you already did this, it didn't work"
+                            # instead of the brain having to infer stalling from a wall of history.
+REFLECTION_INTERVAL = 40   # how often (in actions) to trigger a heavier trajectory-wide reflection
+                            # -- see ToolsAgent._maybe_reflect/VisionToolsAgent._maybe_reflect. Much
+                            # coarser than MODEL_TRIGGER_INTERVAL since a reflection samples MANY
+                            # frames per call (expensive) rather than one.
+MAX_REFLECTION_CALLS = 2   # separate, small budget from MAX_BRAIN_CALLS(_GAME) -- a reflection call
+                            # updates brain_notes as a side channel, it never itself chooses an
+                            # action, so it must not cannibalize the normal decision-making budget.
+BAR_HISTORY_WINDOW = 15    # how many recent pixel-coverage samples to keep per confirmed_bar_color
+                            # for trend reporting -- most ARC-AGI-3 games render a literal HUD
+                            # progress/resource bar (confirmed visually across ls20/cd82/sk48/tr87/
+                            # re86's reflection GIFs, all had one), already detected generically by
+                            # _bar_fragment_counts/_edge_aspect_bar_colors but, until now, only ever
+                            # consulted reactively (did touching X grow it just now) -- this adds a
+                            # continuous trend so the brain can tell whether the LAST FEW actions
+                            # (not just the most recent single touch) have been net helping or not.
+
 MODEL_TRIGGER_INTERVAL = 15  # periodic brain check-in, independent of bootstrap/goal state --
                               # ported from llm_tools_vision_agent.py's "shared" mode (empirically
                               # confirmed the best of 3 tested variants there, see
@@ -788,6 +815,16 @@ class ToolsAgent(Agent):
                                           # of _choose_action_impl
         self.prev_state_sig: tuple | None = None
         self.state_graph_path: list[str] = []
+        self.recent_state_sigs: deque = deque(maxlen=PROGRESS_SIG_WINDOW)  # cycle/stall detection,
+                                                                            # see PROGRESS_SIG_WINDOW
+        self.bar_coverage_history: dict[int, deque] = {}  # bar_color -> deque of recent pixel
+                                                            # counts, see BAR_HISTORY_WINDOW
+        self.cycle_detected_turns_ago: int | None = None  # set each turn by the state-signature
+                                                            # history check, see PROGRESS_SIG_WINDOW
+        self.action_history: list[str] = []  # every action name ever returned by choose_action,
+                                              # unbounded (>=150 entries max, negligible memory) --
+                                              # see REFLECTION_INTERVAL/_maybe_reflect
+        self.reflection_call_count = 0
         self.prev_grid: np.ndarray | None = None
         self.prev_action_name: str | None = None
         self.prev_self_pos: tuple[float, float] | None = None
@@ -1104,7 +1141,11 @@ class ToolsAgent(Agent):
         no traceback surfaced, this is the generic hardening asked for in
         response, not a guess at one specific bug."""
         try:
-            return self._choose_action_impl(frames, latest_frame)
+            action = self._choose_action_impl(frames, latest_frame)
+            self.action_history.append(action.name)
+            if self._reflection_due():
+                self._maybe_reflect()
+            return action
         except Exception as e:
             print(f"[ToolsAgent] choose_action crashed: {e!r}")
             traceback.print_exc()
@@ -1128,6 +1169,19 @@ class ToolsAgent(Agent):
             if not legal:
                 return GameAction.RESET
             return legal[self.action_counter % len(legal)]
+
+    def _reflection_due(self) -> bool:
+        return (self.action_counter > 0 and self.action_counter % REFLECTION_INTERVAL == 0
+                and self.reflection_call_count < MAX_REFLECTION_CALLS)
+
+    def _maybe_reflect(self) -> None:
+        """No-op base implementation -- ToolsAgent is text-only (no image input
+        at all, see _consult_brain), so a multi-FRAME trajectory reflection
+        doesn't apply here. Overridden in VisionToolsAgent, which actually has
+        frames to show. Kept as a hook here (rather than only in the vision
+        subclass) so the single choke point in choose_action doesn't need to
+        know which subclass it's running as."""
+        pass
 
     def _movement_summary(self, legal_names: list[str]) -> str:
         lines = []
@@ -1172,6 +1226,37 @@ class ToolsAgent(Agent):
                 known.add(name)  # has its own local evidence -- don't also show a cross-game hint for it
         digest = mem.digest(legal_names, known)
         return digest or "(no data from other games yet this session)"
+
+    def _progress_signal_summary(self) -> str:
+        """Generic, code-only 'is this actually working' signal -- see
+        PROGRESS_SIG_WINDOW/BAR_HISTORY_WINDOW. Added 2026-09-07 after a
+        retrospective reflection test (results/reflection_20260907/) found the
+        model reasons fine about a game's mechanic when shown the whole
+        trajectory at once, but the LIVE agent kept re-running the same action
+        loop turn after turn with no way to notice it wasn't going anywhere --
+        this makes that fact explicit and machine-checked instead of requiring
+        the brain to infer it from a wall of history it doesn't fully see."""
+        lines = []
+        if self.cycle_detected_turns_ago is not None:
+            lines.append(f"- STALL DETECTED: the game state right now is IDENTICAL to one you were "
+                         f"in {self.cycle_detected_turns_ago} action(s) ago -- whatever happened in "
+                         f"between made no lasting difference, or you went in a circle. Repeating the "
+                         f"same approach again is unlikely to work; try something different.")
+        for color, history in self.bar_coverage_history.items():
+            if len(history) < 3:
+                continue
+            first, last = history[0], history[-1]
+            if last == first:
+                trend = "unchanged"
+            elif last > first:
+                trend = f"GREW ({first} -> {last} pixels)"
+            else:
+                trend = f"SHRANK ({first} -> {last} pixels)"
+            lines.append(f"- A HUD/bar-like region (color {color}) {trend} over the last "
+                         f"{len(history)} actions (direction's meaning isn't certain -- could be "
+                         f"progress, a countdown, or something else -- but a big recent change is "
+                         f"worth connecting to whatever you just tried).")
+        return "\n".join(lines) if lines else "(no stall/trend data yet)"
 
     def _periodic_due(self) -> bool:
         # ported from llm_tools_vision_agent.py's "shared" mode -- see MODEL_TRIGGER_INTERVAL
@@ -1221,10 +1306,12 @@ class ToolsAgent(Agent):
                           "below). \"Move toward a landmark\" is likely not applicable here.")
 
         cross_game_hints = self._sync_shared_action_memory(legal_names)
+        progress_signal = self._progress_signal_summary()
         prompt = (
             f"{position_line}\n\n"
             f"Your notes from earlier turns:\n{self.brain_notes or '(none yet -- this is your first consult this game)'}\n\n"
             f"Movement laws discovered so far:\n{self._movement_summary(legal_names)}\n\n"
+            f"Progress signal (from actual gameplay, not a guess):\n{progress_signal}\n\n"
             f"Hints from OTHER games played this session (same action vocabulary, "
             f"DIFFERENT game -- may not apply here, treat as a weak prior only):\n{cross_game_hints}\n\n"
             f"Landmarks visible now:\n" + "\n".join(blob_lines) + "\n\n" +
@@ -1534,7 +1621,24 @@ class ToolsAgent(Agent):
         if level_changed:
             self.state_graph.mark_goal(sig)
             self.state_graph_path = []  # a level transition invalidates any in-flight plan
+            self.recent_state_sigs.clear()
+            self.bar_coverage_history = {}
         self.prev_state_sig = sig
+
+        # Generic progress/stall signal (see PROGRESS_SIG_WINDOW/BAR_HISTORY_WINDOW): does the
+        # current state already appear in recent history (a cycle -- the last few actions led
+        # nowhere new), and are any detected HUD/bar regions trending up or down. Purely
+        # observational bookkeeping here; _progress_signal_summary() (used when consulting the
+        # brain) is what actually surfaces this.
+        self.cycle_detected_turns_ago = None
+        for i, s in enumerate(reversed(self.recent_state_sigs)):
+            if s == sig:
+                self.cycle_detected_turns_ago = i + 1
+                break
+        self.recent_state_sigs.append(sig)
+        for bar_color in self.confirmed_bar_colors:
+            coverage = int(np.count_nonzero(grid == bar_color))
+            self.bar_coverage_history.setdefault(bar_color, deque(maxlen=BAR_HISTORY_WINDOW)).append(coverage)
 
         if not self.state_graph_path:
             self.state_graph_path = self.state_graph.find_path(sig) or []

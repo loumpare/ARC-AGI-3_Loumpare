@@ -38,6 +38,7 @@ import base64
 import io
 import queue
 import threading
+from collections import deque
 from pathlib import Path
 from typing import Any
 
@@ -50,8 +51,10 @@ from arcengine import FrameData, GameAction, GameState
 from llm_tools_agent import (
     ACTION_NAME_TO_ENUM,
     ACTION_NAMES,
+    BAR_HISTORY_WINDOW,
     DIRECT_ACTION_REPEAT,
     EXTRA_STEP_BUDGET,
+    NOTES_MAX_CHARS,
     OLLAMA_URL,
     STUCK_MAX_DISTINCT_BBOX,
     ToolsAgent,
@@ -291,6 +294,33 @@ available action name (e.g. "ACTION3") -- whichever you're recommending -- \
 and nothing else.
 """
 
+REFLECTION_SYSTEM_PROMPT = """\
+You are periodically reviewing an in-progress ARC-AGI-3 game session, using \
+the WHOLE trajectory so far (several sampled frames across the whole episode, \
+in order, plus the complete action log) instead of just the single current \
+frame a normal turn-by-turn decision is based on.
+
+Based on this wider view, write an updated, concrete hypothesis about this \
+game's actual goal and mechanic, and what you'd recommend trying differently \
+going forward. Look across the whole sequence for patterns a single frame \
+can't reveal: what changed together, what stayed constant, whether the same \
+action ever produced different effects, whether progress correlates with a \
+specific region/object/color, and whether recent actions have actually been \
+making a difference or just repeating without effect.
+
+Respond with 2-4 concrete sentences only (this replaces the agent's working \
+notes for all future turns) -- no restating these instructions, no \
+placeholder text, no preamble.
+"""
+N_REFLECTION_FRAMES = 8
+REFLECTION_TIMEOUT_S = 240
+
+
+def _sample_frame_indices(n_frames: int, n_sample: int) -> list[int]:
+    if n_frames <= n_sample:
+        return list(range(n_frames))
+    return sorted(set(round(i * (n_frames - 1) / (n_sample - 1)) for i in range(n_sample)))
+
 
 def _grid_to_image_b64(grid: np.ndarray, blobs: list[dict] | None = None) -> str:
     """Renders the grid, and if `blobs` is given, labels each one "blob_N"
@@ -393,12 +423,70 @@ class VisionToolsAgent(ToolsAgent):
     # roughly the whole action budget instead of exhausting itself in the first
     # ~60 actions.
     MAX_BRAIN_CALLS_GAME = 10
+    REFLECTION_MODEL = EYES_MODEL  # UnifiedVisionAgent overrides this to its own single model
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.scene_notes = ""
         self.eyes_call_count = 0
         self.periodic_call_count = 0
+
+    def _maybe_reflect(self) -> None:
+        """Overrides ToolsAgent's no-op: periodically (see REFLECTION_INTERVAL)
+        show the model several sampled frames across the WHOLE episode so far
+        (via self.frames, populated by the base Agent class every turn -- no
+        new frame storage needed) plus the full action log, and let it rewrite
+        brain_notes with a trajectory-grounded hypothesis. Added 2026-09-07
+        after a retrospective test (results/reflection_20260907/) showed the
+        model reasons much better given the whole trajectory at once than one
+        frame at a time -- this brings a (cheaper, periodic) version of that
+        into live play instead of only as an after-the-fact diagnostic.
+        Local-dev (Ollama) only for now -- silently skipped when only the
+        Kaggle GGUF path is available (single-image only currently, see
+        _query_eyes_gguf/_query_unified_gguf); this budget-gated (
+        MAX_REFLECTION_CALLS) side channel is additive, so skipping it just
+        means brain_notes keeps evolving the normal single-frame way, exactly
+        today's behavior."""
+        if not _ollama_available():
+            return
+        self.reflection_call_count += 1
+        try:
+            import requests
+            # self.frames[0] is a placeholder FrameData with no `.frame` populated at all (see
+            # agents/agent.py's Agent.__init__: `self.frames = [FrameData(levels_completed=0)]`) --
+            # real frames start at index 1, one per action taken so far.
+            real_frames = self.frames[1:]
+            if not real_frames:
+                return
+            idxs = _sample_frame_indices(len(real_frames), N_REFLECTION_FRAMES)
+            images_b64 = [_grid_to_image_b64(np.array(real_frames[i].frame[0], dtype=int))
+                          for i in idxs]
+            frame_labels = "\n".join(
+                f"Image {k + 1} = the grid after step {idx + 1}."
+                for k, idx in enumerate(idxs))
+            action_log = "\n".join(f"step {i + 1}: {a}" for i, a in enumerate(self.action_history))
+            user_prompt = (
+                f"You are shown {len(idxs)} sampled frames from THIS episode so far "
+                f"({len(self.action_history)} actions taken), in order:\n{frame_labels}\n\n"
+                f"Full action log so far:\n{action_log}\n\n"
+                f"Your current notes (from single-frame turns):\n{self.brain_notes or '(none yet)'}\n\n"
+                f"Write your updated hypothesis as instructed."
+            )
+            resp = requests.post(OLLAMA_URL, json={
+                "model": self.REFLECTION_MODEL,
+                "messages": [
+                    {"role": "system", "content": REFLECTION_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_prompt, "images": images_b64},
+                ],
+                "stream": False,
+                "options": {"temperature": 0.3},
+            }, timeout=REFLECTION_TIMEOUT_S)
+            resp.raise_for_status()
+            reflection = resp.json()["message"]["content"].strip()
+            if reflection:
+                self.brain_notes = reflection[:NOTES_MAX_CHARS]
+        except Exception as e:
+            print(f"[VisionToolsAgent] reflection failed (non-fatal, notes unchanged): {e!r}")
 
     def _periodic_due(self) -> bool:
         if self.action_counter <= 0 or self.action_counter % MODEL_TRIGGER_INTERVAL != 0:
@@ -510,10 +598,12 @@ class VisionToolsAgent(ToolsAgent):
                           "below). \"Move toward a landmark\" is likely not applicable here.")
 
         cross_game_hints = self._sync_shared_action_memory(legal_names)
+        progress_signal = self._progress_signal_summary()
         prompt = (
             f"{position_line}\n\n"
             f"Your notes from earlier turns:\n{self.brain_notes or '(none yet -- this is your first consult this game)'}\n\n"
             f"Movement laws discovered so far:\n{self._movement_summary(legal_names)}\n\n"
+            f"Progress signal (from actual gameplay, not a guess):\n{progress_signal}\n\n"
             f"Hints from OTHER games played this session (same action vocabulary, "
             f"DIFFERENT game -- may not apply here, treat as a weak prior only):\n{cross_game_hints}\n\n"
             f"Vision module's scene notes:\n{self.scene_notes or '(not available this run)'}\n\n"
@@ -733,7 +823,23 @@ class VisionToolsAgent(ToolsAgent):
         if level_changed:
             self.state_graph.mark_goal(sig)
             self.state_graph_path = []  # a level transition invalidates any in-flight plan
+            self.recent_state_sigs.clear()
+            self.bar_coverage_history = {}
         self.prev_state_sig = sig
+
+        # Generic progress/stall signal -- ported from llm_tools_agent.py 2026-09-07
+        # (see PROGRESS_SIG_WINDOW/BAR_HISTORY_WINDOW and _progress_signal_summary
+        # there for the full rationale). Bookkeeping only; surfaced via
+        # self._progress_signal_summary() (inherited, unchanged) when consulting.
+        self.cycle_detected_turns_ago = None
+        for i, s in enumerate(reversed(self.recent_state_sigs)):
+            if s == sig:
+                self.cycle_detected_turns_ago = i + 1
+                break
+        self.recent_state_sigs.append(sig)
+        for bar_color in self.confirmed_bar_colors:
+            coverage = int(np.count_nonzero(grid == bar_color))
+            self.bar_coverage_history.setdefault(bar_color, deque(maxlen=BAR_HISTORY_WINDOW)).append(coverage)
 
         if not self.state_graph_path:
             self.state_graph_path = self.state_graph.find_path(sig) or []
