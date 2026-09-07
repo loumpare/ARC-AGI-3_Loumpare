@@ -1,0 +1,16 @@
+=== trying --accelerator GPU_RTX_PRO_6000X1 ===
+Kernel version 7 successfully pushed.  Please check progress at https://www.kaggle.com/code/loumitrmas/arc-agi-3-gpu-probe
+loumitrmas/arc-agi-3-gpu-probe has status "KernelWorkerStatus.COMPLETE"
+Kernel log downloaded to /tmp/gpu_probe_batch2_GPU_RTX_PRO_6000X1/arc-agi-3-gpu-probe.log 
+Tesla P100-PCIE-16GB
+=== done with GPU_RTX_PRO_6000X1 ===
+
+=== trying --accelerator RTXPRO6000 ===
+Kernel version 8 successfully pushed.  Please check progress at https://www.kaggle.com/code/loumitrmas/arc-agi-3-gpu-probe
+loumitrmas/arc-agi-3-gpu-probe has status "KernelWorkerStatus.COMPLETE"
+Kernel log downloaded to /tmp/gpu_probe_batch2_RTXPRO6000/arc-agi-3-gpu-probe.log 
+Tesla P100-PCIE-16GB
+=== done with RTXPRO6000 ===
+
+=== trying --accelerator GPU_1XRTXPRO6000 ===
+Kernel version 9 successfully pushed.  Please check progress at https://www.kaggle.com/code/loumitrmas/arc-agi-3-gpu-probe

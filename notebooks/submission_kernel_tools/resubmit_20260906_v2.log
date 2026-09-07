@@ -1,0 +1,529 @@
+=== 2026-09-06T01:40:14+02:00 : waiting for kernel v20 Phase A to reach a terminal state ===
+[1] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[2] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[3] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[4] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[5] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[6] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[7] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[8] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[9] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[10] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[11] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[12] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[13] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[14] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[15] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[16] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[17] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[18] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[19] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[20] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[21] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[22] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[23] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[24] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[25] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[26] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[27] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[28] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[29] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[30] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[31] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[32] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[33] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[34] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[35] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[36] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[37] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[38] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[39] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[40] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[41] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[42] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[43] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[44] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[45] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[46] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[47] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[48] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[49] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[50] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[51] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[52] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[53] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[54] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[55] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[56] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[57] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[58] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[59] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[60] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[61] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[62] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[63] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[64] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[65] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[66] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[67] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[68] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[69] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[70] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[71] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[72] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[73] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[74] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[75] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[76] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[77] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[78] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[79] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[80] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[81] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[82] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[83] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[84] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[85] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[86] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[87] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[88] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[89] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[90] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[91] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[92] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[93] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[94] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[95] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[96] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[97] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[98] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[99] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[100] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[101] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[102] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[103] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[104] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[105] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[106] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[107] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[108] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[109] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[110] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[111] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[112] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[113] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[114] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[115] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[116] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[117] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[118] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[119] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[120] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[121] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[122] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[123] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[124] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[125] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[126] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[127] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[128] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[129] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[130] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[131] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[132] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[133] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[134] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[135] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[136] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[137] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[138] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[139] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[140] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[141] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[142] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[143] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[144] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[145] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[146] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[147] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[148] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[149] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[150] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[151] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[152] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[153] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[154] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[155] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[156] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[157] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[158] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[159] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[160] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[161] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[162] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[163] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[164] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[165] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[166] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[167] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[168] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[169] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[170] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[171] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[172] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[173] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[174] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[175] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[176] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[177] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[178] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[179] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[180] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[181] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[182] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[183] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[184] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[185] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[186] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[187] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[188] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[189] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[190] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[191] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[192] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[193] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[194] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[195] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[196] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[197] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[198] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[199] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[200] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[201] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[202] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[203] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[204] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.RUNNING"
+[205] loumitrmas/arc-agi-3-tools-submission has status "KernelWorkerStatus.COMPLETE"
+--- Phase A COMPLETE. Downloading output to confirm submission.parquet exists ---
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/.env.example
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/.git/HEAD
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/.git/config
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/.git/description
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/.git/hooks/applypatch-msg.sample
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/.git/hooks/commit-msg.sample
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/.git/hooks/fsmonitor-watchman.sample
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/.git/hooks/post-update.sample
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/.git/hooks/pre-applypatch.sample
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/.git/hooks/pre-commit.sample
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/.git/hooks/pre-merge-commit.sample
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/.git/hooks/pre-push.sample
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/.git/hooks/pre-rebase.sample
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/.git/hooks/pre-receive.sample
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/.git/hooks/prepare-commit-msg.sample
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/.git/hooks/push-to-checkout.sample
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/.git/hooks/sendemail-validate.sample
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/.git/hooks/update.sample
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/.git/index
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/.git/info/exclude
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/.git/logs/HEAD
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/.git/logs/refs/heads/main
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/.git/logs/refs/remotes/origin/HEAD
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/.git/objects/pack/pack-9e3fcc160aa7f30f497d64a294db91c3b0de5a2c.idx
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/.git/objects/pack/pack-9e3fcc160aa7f30f497d64a294db91c3b0de5a2c.pack
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/.git/objects/pack/pack-9e3fcc160aa7f30f497d64a294db91c3b0de5a2c.rev
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/.git/packed-refs
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/.git/refs/heads/main
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/.git/refs/remotes/origin/HEAD
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/.gitignore
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/.pre-commit-config.yaml
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/.python-version
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/LICENSE
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/README.md
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/agents/README.md
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/agents/__init__.py
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/agents/__pycache__/__init__.cpython-312.pyc
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/agents/__pycache__/agent.cpython-312.pyc
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/agents/__pycache__/recorder.cpython-312.pyc
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/agents/__pycache__/swarm.cpython-312.pyc
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/agents/__pycache__/tracing.cpython-312.pyc
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/agents/agent.py
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/agents/recorder.py
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/agents/swarm.py
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/agents/templates/README.md
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/agents/templates/__pycache__/my_agent.cpython-312.pyc
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/agents/templates/__pycache__/random_agent.cpython-312.pyc
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/agents/templates/langgraph_functional_agent.py
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/agents/templates/langgraph_random_agent.py
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/agents/templates/langgraph_thinking/__init__.py
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/agents/templates/langgraph_thinking/agent.py
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/agents/templates/langgraph_thinking/llm.py
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/agents/templates/langgraph_thinking/nodes.py
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/agents/templates/langgraph_thinking/prompts.py
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/agents/templates/langgraph_thinking/schema.py
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/agents/templates/langgraph_thinking/tools.py
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/agents/templates/langgraph_thinking/vision.py
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/agents/templates/llm_agents.py
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/agents/templates/multimodal.py
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/agents/templates/my_agent.py
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/agents/templates/random_agent.py
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/agents/templates/reasoning_agent.py
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/agents/templates/smolagents.py
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/agents/tracing.py
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/llms.txt
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/main.py
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/pyproject.toml
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/pytest.ini
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/tests/README.md
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/tests/__init__.py
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/tests/conftest.py
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/tests/unit/test_core.py
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/tests/unit/test_recorder.py
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/tests/unit/test_swarm.py
+Output file downloaded to /tmp/resubmit_20260906_v2_output/ARC-AGI-3-Agents/uv.lock
+Output file downloaded to /tmp/resubmit_20260906_v2_output/submission.parquet
+Kernel log downloaded to /tmp/resubmit_20260906_v2_output/arc-agi-3-tools-submission.log 
+--- Phase B: submitting to competition (consumes today's quota) ---
+0 submissions remaining today.
+--- Phase B: polling competition submission status ---
+[1] top_ref=56044148
+[2] top_ref=56044148
+[3] top_ref=56044148
+[4] top_ref=56044148
+[5] top_ref=56044148
+[6] top_ref=56044148
+[7] top_ref=56044148
+[8] top_ref=56044148
+[9] top_ref=56044148
+[10] top_ref=56044148
+[11] top_ref=56044148
+[12] top_ref=56044148
+[13] top_ref=56044148
+[14] top_ref=56044148
+[15] top_ref=56044148
+[16] top_ref=56044148
+[17] top_ref=56044148
+[18] top_ref=56044148
+[19] top_ref=56044148
+[20] top_ref=56044148
+[21] top_ref=56044148
+[22] top_ref=56044148
+[23] top_ref=56044148
+[24] top_ref=56044148
+[25] top_ref=56044148
+[26] top_ref=56044148
+[27] top_ref=56044148
+[28] top_ref=56044148
+[29] top_ref=56044148
+[30] top_ref=56044148
+[31] top_ref=56044148
+[32] top_ref=56044148
+[33] top_ref=56044148
+[34] top_ref=56044148
+[35] top_ref=56044148
+[36] top_ref=56044148
+[37] top_ref=56044148
+[38] top_ref=56044148
+[39] top_ref=56044148
+[40] top_ref=56044148
+[41] top_ref=56044148
+[42] top_ref=56044148
+[43] top_ref=56044148
+[44] top_ref=56044148
+[45] top_ref=56044148
+[46] top_ref=56044148
+[47] top_ref=56044148
+[48] top_ref=56044148
+[49] top_ref=56044148
+[50] top_ref=56044148
+[51] top_ref=56044148
+[52] top_ref=56044148
+[53] top_ref=56044148
+[54] top_ref=56044148
+[55] top_ref=56044148
+[56] top_ref=56044148
+[57] top_ref=56044148
+[58] top_ref=56044148
+[59] top_ref=56044148
+[60] top_ref=56044148
+[61] top_ref=56044148
+[62] top_ref=56044148
+[63] top_ref=56044148
+[64] top_ref=56044148
+[65] top_ref=56044148
+[66] top_ref=56044148
+[67] top_ref=56044148
+[68] top_ref=56044148
+[69] top_ref=56044148
+[70] top_ref=56044148
+[71] top_ref=56044148
+[72] top_ref=56044148
+[73] top_ref=56044148
+[74] top_ref=56044148
+[75] top_ref=56044148
+[76] top_ref=56044148
+[77] top_ref=56044148
+[78] top_ref=56044148
+[79] top_ref=56044148
+[80] top_ref=56044148
+[81] top_ref=56044148
+[82] top_ref=56044148
+[83] top_ref=56044148
+[84] top_ref=56044148
+[85] top_ref=56044148
+[86] top_ref=56044148
+[87] top_ref=56044148
+[88] top_ref=56044148
+[89] top_ref=56044148
+[90] top_ref=56044148
+[91] top_ref=56044148
+[92] top_ref=56044148
+[93] top_ref=56044148
+[94] top_ref=56044148
+[95] top_ref=56044148
+[96] top_ref=56044148
+[97] top_ref=56044148
+[98] top_ref=56044148
+[99] top_ref=56044148
+[100] top_ref=56044148
+[101] top_ref=56044148
+[102] top_ref=56044148
+[103] top_ref=56044148
+[104] top_ref=56044148
+[105] top_ref=56044148
+[106] top_ref=56044148
+[107] top_ref=56044148
+[108] top_ref=56044148
+[109] top_ref=56044148
+[110] top_ref=56044148
+[111] top_ref=56044148
+[112] top_ref=56044148
+[113] top_ref=56044148
+[114] top_ref=56044148
+[115] top_ref=56044148
+[116] top_ref=56044148
+[117] top_ref=56044148
+[118] top_ref=56044148
+[119] top_ref=56044148
+[120] top_ref=56044148
+[121] top_ref=56044148
+[122] top_ref=56044148
+[123] top_ref=56044148
+[124] top_ref=56044148
+[125] top_ref=56044148
+[126] top_ref=56044148
+[127] top_ref=56044148
+[128] top_ref=56044148
+[129] top_ref=56044148
+[130] top_ref=56044148
+[131] top_ref=56044148
+[132] top_ref=56044148
+[133] top_ref=56044148
+[134] top_ref=56044148
+[135] top_ref=56044148
+[136] top_ref=56044148
+[137] top_ref=56044148
+[138] top_ref=56044148
+[139] top_ref=56044148
+[140] top_ref=56044148
+[141] top_ref=56044148
+[142] top_ref=56044148
+[143] top_ref=56044148
+[144] top_ref=56044148
+[145] top_ref=56044148
+[146] top_ref=56044148
+[147] top_ref=56044148
+[148] top_ref=56044148
+[149] top_ref=56044148
+[150] top_ref=56044148
+[151] top_ref=56044148
+[152] top_ref=56044148
+[153] top_ref=56044148
+[154] top_ref=56044148
+[155] top_ref=56044148
+[156] top_ref=56044148
+[157] top_ref=56044148
+[158] top_ref=56044148
+[159] top_ref=56044148
+[160] top_ref=56044148
+[161] top_ref=56044148
+[162] top_ref=56044148
+[163] top_ref=56044148
+[164] top_ref=56044148
+[165] top_ref=56044148
+[166] top_ref=56044148
+[167] top_ref=56044148
+[168] top_ref=56044148
+[169] top_ref=56044148
+[170] top_ref=56044148
+[171] top_ref=56044148
+[172] top_ref=56044148
+[173] top_ref=56044148
+[174] top_ref=56044148
+[175] top_ref=56044148
+[176] top_ref=56044148
+[177] top_ref=56044148
+[178] top_ref=56044148
+[179] top_ref=56044148
+[180] top_ref=56044148
+[181] top_ref=56044148
+[182] top_ref=56044148
+[183] top_ref=56044148
+[184] top_ref=56044148
+[185] top_ref=56044148
+[186] top_ref=56044148
+[187] top_ref=56044148
+[188] top_ref=56044148
+[189] top_ref=56044148
+[190] top_ref=56044148
+[191] top_ref=56044148
+[192] top_ref=56044148
+[193] top_ref=56044148
+[194] top_ref=56044148
+[195] top_ref=56044148
+[196] top_ref=56044148
+[197] top_ref=56044148
+[198] top_ref=56044148
+[199] top_ref=56044148
+[200] top_ref=56044148
+[201] top_ref=56044148
+[202] top_ref=56044148
+[203] top_ref=56044148
+[204] top_ref=56044148
+[205] top_ref=56044148
+[206] top_ref=56044148
+[207] top_ref=56044148
+[208] top_ref=56044148
+[209] top_ref=56044148
+[210] top_ref=56044148
+[211] top_ref=56044148
+[212] top_ref=56044148
+[213] top_ref=56044148
+[214] top_ref=56044148
+[215] top_ref=56044148
+[216] top_ref=56044148
+[217] top_ref=56044148
+[218] top_ref=56044148
+[219] top_ref=56044148
+[220] top_ref=56044148
+[221] top_ref=56044148
+[222] top_ref=56044148
+[223] top_ref=56044148
+[224] top_ref=56044148
+[225] top_ref=56044148
+[226] top_ref=56044148
+[227] top_ref=56044148
+[228] top_ref=56044148
+[229] top_ref=56044148
+[230] top_ref=56044148
+[231] top_ref=56044148
+[232] top_ref=56044148
+[233] top_ref=56044148
+[234] top_ref=56044148
+[235] top_ref=56044148
+[236] top_ref=56044148
+[237] top_ref=56044148
+[238] top_ref=56044148
+[239] top_ref=56044148
+[240] top_ref=56044148
+RESULT: PHASE_B_TIMEOUT (no terminal status after 2h) kernel_version=20
+=== 2026-09-06T05:29:51+02:00 : finished ===

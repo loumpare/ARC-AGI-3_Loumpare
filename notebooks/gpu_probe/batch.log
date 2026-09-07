@@ -1,0 +1,36 @@
+=== trying --accelerator GPU_RTX6000PROX1 ===
+Kernel version 3 successfully pushed.  Please check progress at https://www.kaggle.com/code/loumitrmas/arc-agi-3-gpu-probe
+loumitrmas/arc-agi-3-gpu-probe has status "KernelWorkerStatus.COMPLETE"
+Kernel log downloaded to /tmp/gpu_probe_batch_GPU_RTX6000PROX1/arc-agi-3-gpu-probe.log 
+,{"stream_name":"stdout","time":7.682094312,"data":"| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |\n"}
+,{"stream_name":"stdout","time":7.6820967079999996,"data":"| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |\n"}
+,{"stream_name":"stdout","time":7.682099111,"data":"|                                         |                        |               MIG M. |\n"}
+=== done with GPU_RTX6000PROX1 ===
+
+=== trying --accelerator RTX6000PRO ===
+Kernel version 4 successfully pushed.  Please check progress at https://www.kaggle.com/code/loumitrmas/arc-agi-3-gpu-probe
+loumitrmas/arc-agi-3-gpu-probe has status "KernelWorkerStatus.COMPLETE"
+Kernel log downloaded to /tmp/gpu_probe_batch_RTX6000PRO/arc-agi-3-gpu-probe.log 
+,{"stream_name":"stdout","time":8.688349552,"data":"| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |\n"}
+,{"stream_name":"stdout","time":8.688354888,"data":"| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |\n"}
+,{"stream_name":"stdout","time":8.688359479,"data":"|                                         |                        |               MIG M. |\n"}
+=== done with RTX6000PRO ===
+
+=== trying --accelerator GPU_1XRTX6000PRO ===
+Kernel version 5 successfully pushed.  Please check progress at https://www.kaggle.com/code/loumitrmas/arc-agi-3-gpu-probe
+loumitrmas/arc-agi-3-gpu-probe has status "KernelWorkerStatus.COMPLETE"
+Kernel log downloaded to /tmp/gpu_probe_batch_GPU_1XRTX6000PRO/arc-agi-3-gpu-probe.log 
+,{"stream_name":"stdout","time":8.248324379,"data":"| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |\n"}
+,{"stream_name":"stdout","time":8.248326695,"data":"| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |\n"}
+,{"stream_name":"stdout","time":8.248329035,"data":"|                                         |                        |               MIG M. |\n"}
+=== done with GPU_1XRTX6000PRO ===
+
+=== trying --accelerator PREFERRED_GPU ===
+Kernel version 6 successfully pushed.  Please check progress at https://www.kaggle.com/code/loumitrmas/arc-agi-3-gpu-probe
+loumitrmas/arc-agi-3-gpu-probe has status "KernelWorkerStatus.COMPLETE"
+Kernel log downloaded to /tmp/gpu_probe_batch_PREFERRED_GPU/arc-agi-3-gpu-probe.log 
+,{"stream_name":"stdout","time":9.108152456,"data":"| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |\n"}
+,{"stream_name":"stdout","time":9.108156719,"data":"| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |\n"}
+,{"stream_name":"stdout","time":9.108161744,"data":"|                                         |                        |               MIG M. |\n"}
+=== done with PREFERRED_GPU ===
+

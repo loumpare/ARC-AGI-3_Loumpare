@@ -36,6 +36,9 @@ from __future__ import annotations
 
 import base64
 import io
+import queue
+import threading
+from pathlib import Path
 from typing import Any
 
 import matplotlib
@@ -57,10 +60,16 @@ from llm_tools_agent import (
     _bulk_colors,
     _closest_blob,
     _find_blobs,
+    _GGUF_SEARCH_ROOTS,
+    _gpu_offload_available,
     _grid_of,
     _ollama_available,
+    _pending_brain_threads,
+    _pending_brain_threads_lock,
     _query_brain_bounded,
+    _raw_mask_bbox,
     _structural_fact_lines,
+    _usable_cpu_count,
 )
 
 # ACTION6 ("click") is deliberately NOT added to llm_tools_agent's shared
@@ -74,10 +83,121 @@ _CLICK_ACTION_NAMES[GameAction.ACTION6.value] = "ACTION6"
 _CLICK_ACTION_NAME_TO_ENUM = dict(ACTION_NAME_TO_ENUM)
 _CLICK_ACTION_NAME_TO_ENUM["ACTION6"] = GameAction.ACTION6
 
-EYES_MODEL = "gemma4:e4b"
+EYES_MODEL = "gemma4:e4b"  # local Ollama dev only -- see _query_eyes
 UPSCALE_SIZE = 512
 MAX_EYES_CALLS = 1  # one static scene description per level is the design ask --
                      # cheap (not per-turn) and re-triggered only on a level change
+
+# Kaggle GPU path: our own qwen3.8-27B GGUF + mmproj (same weights already used for
+# the text-only brain's model family, extracted from local Ollama blobs -- not a
+# third-party model), run in-process via llama-cpp-python's MTMDChatHandler with
+# full GPU offload. Deliberately GPU-ONLY: a CPU-only run of this same model
+# measured ~170s/call locally (see llm_relay_agent_experiments memory,
+# 2026-09-06), which would blow the per-game latency budget many times over
+# under real ~110-way Kaggle thread contention -- confirmed via a real Kaggle
+# benchmark kernel (notebooks/gpu_bench/) that full GPU offload on the
+# competition's RTX PRO 6000 brings the SAME model+prompt down to ~2-6s/call, so
+# unlike the brain's CPU-only path this one is only worth attempting with a real
+# GPU present; if the GPU isn't recognized (offload unsupported), _query_eyes
+# skips straight to "vision unavailable" rather than eating a 170s CPU fallback.
+_VISION_GGUF_FILENAME = "qwen3.8-27b.gguf"
+_VISION_MMPROJ_FILENAME = "qwen3.8-27b-mmproj.gguf"
+_vision_llama_singleton = None  # (Llama, MTMDChatHandler) tuple, lazily built -- see _get_local_vision_llama
+_vision_llama_lock = threading.Lock()
+EYES_CALL_TIMEOUT_S = 60  # generous vs the ~2-6s measured on the real RTX PRO 6000 (see
+                           # notebooks/gpu_bench/), but still bounded so one stuck native
+                           # call can't hang a game thread indefinitely -- same rationale as
+                           # BRAIN_CALL_TIMEOUT_S in llm_tools_agent.py
+
+
+def _find_vision_file(filename: str) -> Path:
+    # same search-by-filename approach as llm_tools_agent._find_gguf, for the
+    # same reason: Kaggle's exact model_sources mount path varies by
+    # owner/slug/framework/instance/version and shouldn't be hardcoded (see
+    # feedback_verify_before_asserting)
+    for root in _GGUF_SEARCH_ROOTS:
+        if not root.exists():
+            continue
+        for match in root.rglob(filename):
+            return match
+    raise FileNotFoundError(f"{filename} not found under any of: {_GGUF_SEARCH_ROOTS}")
+
+
+def _get_local_vision_llama():
+    global _vision_llama_singleton
+    if _vision_llama_singleton is not None:
+        return _vision_llama_singleton
+    with _vision_llama_lock:
+        if _vision_llama_singleton is None:  # re-check: another thread may have won the race
+            from llama_cpp import Llama
+            from llama_cpp.llama_chat_format import MTMDChatHandler
+            mmproj_path = _find_vision_file(_VISION_MMPROJ_FILENAME)
+            handler = MTMDChatHandler(clip_model_path=str(mmproj_path), verbose=False)
+            model_path = _find_vision_file(_VISION_GGUF_FILENAME)
+            llm = Llama(model_path=str(model_path), chat_handler=handler, n_ctx=4096,
+                        n_gpu_layers=-1, n_threads=_usable_cpu_count(), verbose=False)
+            _vision_llama_singleton = (llm, handler)
+        return _vision_llama_singleton
+
+
+def _query_eyes_gguf(image_b64: str, blob_lines: list[str]) -> str:
+    """GPU-GGUF path for _query_eyes -- see the module-level comment above
+    _VISION_GGUF_FILENAME for why this is GPU-only. Mirrors llm_tools_agent's
+    `_query_brain`'s local-GGUF branch: one shared Llama instance, serialized
+    behind a lock since llama-cpp-python inference isn't safe for concurrent
+    calls on one instance (same reasoning as _llama_lock there)."""
+    llm, handler = _get_local_vision_llama()
+    user_text = (
+        "Exact object list (already computed, certain):\n" + "\n".join(blob_lines) +
+        "\n\nDescribe what these look like and any structural pattern you notice."
+    )
+    with _vision_llama_lock:
+        resp = handler(
+            llama=llm,
+            messages=[
+                {"role": "system", "content": EYES_SYSTEM_PROMPT},
+                {"role": "user", "content": [
+                    {"type": "text", "text": user_text},
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_b64}"}},
+                ]},
+            ],
+            max_tokens=300,
+            temperature=0.2,
+            # "low" was found, empirically, to answer just as completely as the
+            # default "xhigh" (shorter <think> block, not a truncated one) while
+            # being meaningfully faster on the real GPU (2.2s vs 6.2s measured on
+            # the same prompt -- see notebooks/gpu_bench/, 2026-09-06) -- unlike
+            # on CPU, where reasoning_effort barely moved total wall-clock time.
+            reasoning_effort="low",
+        )
+    return resp["choices"][0]["message"]["content"]
+
+
+def _query_eyes_bounded(image_b64: str, blob_lines: list[str]) -> str:
+    """Same bounded-daemon-thread pattern as llm_tools_agent._query_brain_bounded
+    (see that function's docstring for why an unbounded call is a whole-submission
+    hang risk, not just a slow one) -- reuses that module's SAME pending-thread
+    list/lock so the one atexit drain hook there covers eyes calls too instead of
+    needing a second copy of that exit-time-segfault-avoidance machinery."""
+    outcome: queue.Queue = queue.Queue(maxsize=1)
+
+    def worker() -> None:
+        try:
+            outcome.put(("ok", _query_eyes_gguf(image_b64, blob_lines)))
+        except Exception as e:  # noqa: BLE001 -- forwarded to the caller below
+            outcome.put(("err", e))
+
+    t = threading.Thread(target=worker, daemon=True)
+    with _pending_brain_threads_lock:
+        _pending_brain_threads.append(t)
+    t.start()
+    try:
+        status, payload = outcome.get(timeout=EYES_CALL_TIMEOUT_S)
+    except queue.Empty:
+        raise TimeoutError(f"eyes call exceeded {EYES_CALL_TIMEOUT_S}s") from None
+    if status == "err":
+        raise payload
+    return payload
 MODEL_TRIGGER_INTERVAL = 15  # periodic check-in, regardless of bootstrap/goal state --
                               # the "ask only once a fresh goal is needed" trigger can
                               # only ever fire AFTER self-identification succeeds, so on
@@ -197,29 +317,34 @@ def _grid_to_image_b64(grid: np.ndarray, blobs: list[dict] | None = None) -> str
 
 
 def _query_eyes(image_b64: str, blob_lines: list[str]) -> str:
-    # Local-dev only for now: Ollama-served Gemma. Porting this to a bundled
-    # CPU GGUF (llama-cpp-python supports multimodal via an mmproj file) is a
-    # separate, later decision -- see feedback_verify_before_asserting, don't
-    # assume it'll port cleanly without testing that path directly first.
-    if not _ollama_available():
-        raise RuntimeError("Ollama not available -- vision scene notes need a local Ollama+Gemma "
-                            "for now, not yet ported to the bundled-GGUF Kaggle path")
-    import requests
-    user_content = (
-        "Exact object list (already computed, certain):\n" + "\n".join(blob_lines) +
-        "\n\nDescribe what these look like and any structural pattern you notice."
-    )
-    resp = requests.post(OLLAMA_URL, json={
-        "model": EYES_MODEL,
-        "messages": [
-            {"role": "system", "content": EYES_SYSTEM_PROMPT},
-            {"role": "user", "content": user_content, "images": [image_b64]},
-        ],
-        "stream": False,
-        "options": {"temperature": 0.2},
-    }, timeout=180)
-    resp.raise_for_status()
-    return resp.json()["message"]["content"]
+    # Local dev: Ollama-served Gemma, unchanged. Kaggle (no Ollama, no internet):
+    # falls through to our own bundled qwen3.8 GGUF+mmproj, GPU-offloaded -- see
+    # _query_eyes_gguf's docstring for why this branch is GPU-only (a CPU
+    # fallback here would blow the per-game latency budget, unlike the brain's
+    # CPU-viable path in llm_tools_agent.py).
+    if _ollama_available():
+        import requests
+        user_content = (
+            "Exact object list (already computed, certain):\n" + "\n".join(blob_lines) +
+            "\n\nDescribe what these look like and any structural pattern you notice."
+        )
+        resp = requests.post(OLLAMA_URL, json={
+            "model": EYES_MODEL,
+            "messages": [
+                {"role": "system", "content": EYES_SYSTEM_PROMPT},
+                {"role": "user", "content": user_content, "images": [image_b64]},
+            ],
+            "stream": False,
+            "options": {"temperature": 0.2},
+        }, timeout=180)
+        resp.raise_for_status()
+        return resp.json()["message"]["content"]
+    if not _gpu_offload_available():
+        raise RuntimeError("neither Ollama nor GPU offload available -- vision scene notes need "
+                            "either a local Ollama+Gemma (dev) or a real GPU for the bundled "
+                            "qwen3.8 GGUF (Kaggle); CPU-only fallback deliberately not attempted "
+                            "(see _query_eyes_gguf docstring)")
+    return _query_eyes_bounded(image_b64, blob_lines)
 
 
 class VisionToolsAgent(ToolsAgent):
@@ -463,6 +588,57 @@ class VisionToolsAgent(ToolsAgent):
             self.recent_action_log.clear()
         self.prev_levels_completed = latest_frame.levels_completed
         self._update_from_last_transition(grid)
+
+        # PORTED 2026-09-06 from llm_tools_agent.ToolsAgent's calibration phase
+        # (added there same day, user-requested) -- see this class's docstring
+        # warning above and llm_relay_agent_experiments memory: this method is a
+        # FULL override, not an extension, so base-class fixes never propagate
+        # here automatically (already bit us once, 2026-09-05, anti-loop fix).
+        # Deterministically try every non-click legal action TWICE right at
+        # game start, then RESET, before any goal-directed/vision-consulted
+        # play begins -- verified via arcengine's own source (see the base
+        # class's identical comment) that a mid-game RESET here cannot lose
+        # levels_completed/level progress, only replay the current level fresh.
+        if not self.calibration_done:
+            if not self.calibration_actions:
+                self.calibration_actions = [n for n in legal_names if n != "ACTION6"]
+            if not self.calibration_actions:
+                self.calibration_done = True
+            elif self.calibration_reset_pending:
+                self.prev_grid = None
+                self.prev_action_name = None
+                # see llm_tools_agent's identical fix/comment: self_bbox must NOT be
+                # nulled to None here (found the hard way via a real Kaggle Phase A
+                # crash, 2026-09-07) -- recompute it fresh from the just-arrived
+                # post-reset grid instead, so self_pos is never None on the very
+                # first post-calibration goal-directed turn.
+                self.self_bbox = _raw_mask_bbox(grid, self.self_colors) if self.self_colors else None
+                self.prev_self_pos = _bbox_centroid(self.self_bbox) if self.self_bbox else None
+                self.current_path = []
+                self.current_goal_key = None
+                self.current_goal_bbox = None
+                self.pending_arrival_check = None
+                self.pending_arrival_action = None
+                self.extra_step_budget = 0
+                self.extra_step_action = None
+                self.recent_action_log.clear()
+                self.direct_action_repeat_remaining = 0
+                self.prev_state_sig = None
+                self.state_graph_path = []
+                self.calibration_reset_pending = False
+                self.calibration_done = True
+            elif self.calibration_step < 2 * len(self.calibration_actions):
+                chosen_name = self.calibration_actions[self.calibration_step % len(self.calibration_actions)]
+                self.calibration_step += 1
+                self.tried_actions.add(chosen_name)
+                self.prev_grid = grid
+                self.prev_action_name = chosen_name
+                return _CLICK_ACTION_NAME_TO_ENUM[chosen_name]
+            else:
+                self.calibration_reset_pending = True
+                self.prev_grid = grid
+                self.prev_action_name = None
+                return GameAction.RESET
 
         if not level_changed:
             # PORTED 2026-09-05 from llm_tools_agent.ToolsAgent (added there 2026-09-04,

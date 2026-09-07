@@ -1,0 +1,329 @@
+=== 2026-09-07T02:08:15+02:00 : confirming kernel v4 is still COMPLETE ===
+loumitrmas/arc-agi-3-vision-submission has status "KernelWorkerStatus.COMPLETE"
+--- downloading output to confirm submission.parquet exists ---
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/.env.example
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/.git/HEAD
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/.git/config
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/.git/description
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/.git/hooks/applypatch-msg.sample
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/.git/hooks/commit-msg.sample
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/.git/hooks/fsmonitor-watchman.sample
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/.git/hooks/post-update.sample
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/.git/hooks/pre-applypatch.sample
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/.git/hooks/pre-commit.sample
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/.git/hooks/pre-merge-commit.sample
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/.git/hooks/pre-push.sample
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/.git/hooks/pre-rebase.sample
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/.git/hooks/pre-receive.sample
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/.git/hooks/prepare-commit-msg.sample
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/.git/hooks/push-to-checkout.sample
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/.git/hooks/sendemail-validate.sample
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/.git/hooks/update.sample
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/.git/index
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/.git/info/exclude
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/.git/logs/HEAD
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/.git/logs/refs/heads/main
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/.git/logs/refs/remotes/origin/HEAD
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/.git/objects/pack/pack-9e3fcc160aa7f30f497d64a294db91c3b0de5a2c.idx
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/.git/objects/pack/pack-9e3fcc160aa7f30f497d64a294db91c3b0de5a2c.pack
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/.git/objects/pack/pack-9e3fcc160aa7f30f497d64a294db91c3b0de5a2c.rev
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/.git/packed-refs
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/.git/refs/heads/main
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/.git/refs/remotes/origin/HEAD
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/.gitignore
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/.pre-commit-config.yaml
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/.python-version
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/LICENSE
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/README.md
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/agents/README.md
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/agents/__init__.py
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/agents/__pycache__/__init__.cpython-312.pyc
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/agents/__pycache__/agent.cpython-312.pyc
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/agents/__pycache__/recorder.cpython-312.pyc
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/agents/__pycache__/swarm.cpython-312.pyc
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/agents/__pycache__/tracing.cpython-312.pyc
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/agents/agent.py
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/agents/recorder.py
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/agents/swarm.py
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/agents/templates/README.md
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/agents/templates/__pycache__/my_agent.cpython-312.pyc
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/agents/templates/__pycache__/random_agent.cpython-312.pyc
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/agents/templates/langgraph_functional_agent.py
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/agents/templates/langgraph_random_agent.py
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/agents/templates/langgraph_thinking/__init__.py
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/agents/templates/langgraph_thinking/agent.py
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/agents/templates/langgraph_thinking/llm.py
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/agents/templates/langgraph_thinking/nodes.py
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/agents/templates/langgraph_thinking/prompts.py
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/agents/templates/langgraph_thinking/schema.py
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/agents/templates/langgraph_thinking/tools.py
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/agents/templates/langgraph_thinking/vision.py
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/agents/templates/llm_agents.py
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/agents/templates/multimodal.py
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/agents/templates/my_agent.py
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/agents/templates/random_agent.py
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/agents/templates/reasoning_agent.py
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/agents/templates/smolagents.py
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/agents/tracing.py
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/llms.txt
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/main.py
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/pyproject.toml
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/pytest.ini
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/tests/README.md
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/tests/__init__.py
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/tests/conftest.py
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/tests/unit/test_core.py
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/tests/unit/test_recorder.py
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/tests/unit/test_swarm.py
+Output file downloaded to /tmp/resubmit_20260907_output/ARC-AGI-3-Agents/uv.lock
+Output file downloaded to /tmp/resubmit_20260907_output/submission.parquet
+Kernel log downloaded to /tmp/resubmit_20260907_output/arc-agi-3-vision-submission.log 
+--- checking today's submission quota before spending it ---
+Submissions today: 0
+Lifetime submissions: 3
+Remaining today: 1
+--- Phase B: submitting to competition (consumes today's quota) ---
+0 submissions remaining today.
+--- Phase B: polling competition submission status ---
+[1] top_ref=56065271
+[2] top_ref=56065271
+[3] top_ref=56065271
+[4] top_ref=56065271
+[5] top_ref=56065271
+[6] top_ref=56065271
+[7] top_ref=56065271
+[8] top_ref=56065271
+[9] top_ref=56065271
+[10] top_ref=56065271
+[11] top_ref=56065271
+[12] top_ref=56065271
+[13] top_ref=56065271
+[14] top_ref=56065271
+[15] top_ref=56065271
+[16] top_ref=56065271
+[17] top_ref=56065271
+[18] top_ref=56065271
+[19] top_ref=56065271
+[20] top_ref=56065271
+[21] top_ref=56065271
+[22] top_ref=56065271
+[23] top_ref=56065271
+[24] top_ref=56065271
+[25] top_ref=56065271
+[26] top_ref=56065271
+[27] top_ref=56065271
+[28] top_ref=56065271
+[29] top_ref=56065271
+[30] top_ref=56065271
+[31] top_ref=56065271
+[32] top_ref=56065271
+[33] top_ref=56065271
+[34] top_ref=56065271
+[35] top_ref=56065271
+[36] top_ref=56065271
+[37] top_ref=56065271
+[38] top_ref=56065271
+[39] top_ref=56065271
+[40] top_ref=56065271
+[41] top_ref=56065271
+[42] top_ref=56065271
+[43] top_ref=56065271
+[44] top_ref=56065271
+[45] top_ref=56065271
+[46] top_ref=56065271
+[47] top_ref=56065271
+[48] top_ref=56065271
+[49] top_ref=56065271
+[50] top_ref=56065271
+[51] top_ref=56065271
+[52] top_ref=56065271
+[53] top_ref=56065271
+[54] top_ref=56065271
+[55] top_ref=56065271
+[56] top_ref=56065271
+[57] top_ref=56065271
+[58] top_ref=56065271
+[59] top_ref=56065271
+[60] top_ref=56065271
+[61] top_ref=56065271
+[62] top_ref=56065271
+[63] top_ref=56065271
+[64] top_ref=56065271
+[65] top_ref=56065271
+[66] top_ref=56065271
+[67] top_ref=56065271
+[68] top_ref=56065271
+[69] top_ref=56065271
+[70] top_ref=56065271
+[71] top_ref=56065271
+[72] top_ref=56065271
+[73] top_ref=56065271
+[74] top_ref=56065271
+[75] top_ref=56065271
+[76] top_ref=56065271
+[77] top_ref=56065271
+[78] top_ref=56065271
+[79] top_ref=56065271
+[80] top_ref=56065271
+[81] top_ref=56065271
+[82] top_ref=56065271
+[83] top_ref=56065271
+[84] top_ref=56065271
+[85] top_ref=56065271
+[86] top_ref=56065271
+[87] top_ref=56065271
+[88] top_ref=56065271
+[89] top_ref=56065271
+[90] top_ref=56065271
+[91] top_ref=56065271
+[92] top_ref=56065271
+[93] top_ref=56065271
+[94] top_ref=56065271
+[95] top_ref=56065271
+[96] top_ref=56065271
+[97] top_ref=56065271
+[98] top_ref=56065271
+[99] top_ref=56065271
+[100] top_ref=56065271
+[101] top_ref=56065271
+[102] top_ref=56065271
+[103] top_ref=56065271
+[104] top_ref=56065271
+[105] top_ref=56065271
+[106] top_ref=56065271
+[107] top_ref=56065271
+[108] top_ref=56065271
+[109] top_ref=56065271
+[110] top_ref=56065271
+[111] top_ref=56065271
+[112] top_ref=56065271
+[113] top_ref=56065271
+[114] top_ref=56065271
+[115] top_ref=56065271
+[116] top_ref=56065271
+[117] top_ref=56065271
+[118] top_ref=56065271
+[119] top_ref=56065271
+[120] top_ref=56065271
+[121] top_ref=56065271
+[122] top_ref=56065271
+[123] top_ref=56065271
+[124] top_ref=56065271
+[125] top_ref=56065271
+[126] top_ref=56065271
+[127] top_ref=56065271
+[128] top_ref=56065271
+[129] top_ref=56065271
+[130] top_ref=56065271
+[131] top_ref=56065271
+[132] top_ref=56065271
+[133] top_ref=56065271
+[134] top_ref=56065271
+[135] top_ref=56065271
+[136] top_ref=56065271
+[137] top_ref=56065271
+[138] top_ref=56065271
+[139] top_ref=56065271
+[140] top_ref=56065271
+[141] top_ref=56065271
+[142] top_ref=56065271
+[143] top_ref=56065271
+[144] top_ref=56065271
+[145] top_ref=56065271
+[146] top_ref=56065271
+[147] top_ref=56065271
+[148] top_ref=56065271
+[149] top_ref=56065271
+[150] top_ref=56065271
+[151] top_ref=56065271
+[152] top_ref=56065271
+[153] top_ref=56065271
+[154] top_ref=56065271
+[155] top_ref=56065271
+[156] top_ref=56065271
+[157] top_ref=56065271
+[158] top_ref=56065271
+[159] top_ref=56065271
+[160] top_ref=56065271
+[161] top_ref=56065271
+[162] top_ref=56065271
+[163] top_ref=56065271
+[164] top_ref=56065271
+[165] top_ref=56065271
+[166] top_ref=56065271
+[167] top_ref=56065271
+[168] top_ref=56065271
+[169] top_ref=56065271
+[170] top_ref=56065271
+[171] top_ref=56065271
+[172] top_ref=56065271
+[173] top_ref=56065271
+[174] top_ref=56065271
+[175] top_ref=56065271
+[176] top_ref=56065271
+[177] top_ref=56065271
+[178] top_ref=56065271
+[179] top_ref=56065271
+[180] top_ref=56065271
+[181] top_ref=56065271
+[182] top_ref=56065271
+[183] top_ref=56065271
+[184] top_ref=56065271
+[185] top_ref=56065271
+[186] top_ref=56065271
+[187] top_ref=56065271
+[188] top_ref=56065271
+[189] top_ref=56065271
+[190] top_ref=56065271
+[191] top_ref=56065271
+[192] top_ref=56065271
+[193] top_ref=56065271
+[194] top_ref=56065271
+[195] top_ref=56065271
+[196] top_ref=56065271
+[197] top_ref=56065271
+[198] top_ref=56065271
+[199] top_ref=56065271
+[200] top_ref=56065271
+[201] top_ref=56065271
+[202] top_ref=56065271
+[203] top_ref=56065271
+[204] top_ref=56065271
+[205] top_ref=56065271
+[206] top_ref=56065271
+[207] top_ref=56065271
+[208] top_ref=56065271
+[209] top_ref=56065271
+[210] top_ref=56065271
+[211] top_ref=56065271
+[212] top_ref=56065271
+[213] top_ref=56065271
+[214] top_ref=56065271
+[215] top_ref=56065271
+[216] top_ref=56065271
+[217] top_ref=56065271
+[218] top_ref=56065271
+[219] top_ref=56065271
+[220] top_ref=56065271
+[221] top_ref=56065271
+[222] top_ref=56065271
+[223] top_ref=56065271
+[224] top_ref=56065271
+[225] top_ref=56065271
+[226] top_ref=56065271
+[227] top_ref=56065271
+[228] top_ref=56065271
+[229] top_ref=56065271
+[230] top_ref=56065271
+[231] top_ref=56065271
+[232] top_ref=56065271
+[233] top_ref=56065271
+[234] top_ref=56065271
+[235] top_ref=56065271
+[236] top_ref=56065271
+[237] top_ref=56065271
+[238] top_ref=56065271
+[239] top_ref=56065271
+[240] top_ref=56065271
+RESULT: PHASE_B_TIMEOUT (no terminal status after 2h) kernel_version=4
+=== 2026-09-07T04:12:46+02:00 : finished ===
