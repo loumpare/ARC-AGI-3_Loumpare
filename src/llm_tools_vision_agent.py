@@ -50,8 +50,8 @@ from arcengine import FrameData, GameAction, GameState
 from llm_tools_agent import (
     ACTION_NAME_TO_ENUM,
     ACTION_NAMES,
+    DIRECT_ACTION_REPEAT,
     EXTRA_STEP_BUDGET,
-    MAX_BRAIN_CALLS,
     OLLAMA_URL,
     STUCK_MAX_DISTINCT_BBOX,
     ToolsAgent,
@@ -71,6 +71,7 @@ from llm_tools_agent import (
     _structural_fact_lines,
     _usable_cpu_count,
 )
+from state_graph import state_signature
 
 # ACTION6 ("click") is deliberately NOT added to llm_tools_agent's shared
 # ACTION_SPACE -- that module is also used by the plain ToolsAgent, and every
@@ -377,6 +378,21 @@ class VisionToolsAgent(ToolsAgent):
     PERIODIC_MODE = "shared"
     MAX_PERIODIC_CALLS = 2
     STUCK_THRESHOLD = 3
+    # Whole-GAME brain-call ceiling for this class -- deliberately separate from
+    # ToolsAgent's MAX_BRAIN_CALLS (a PER-LEVEL cap there, see llm_tools_agent.py).
+    # Every gate below checks this against brain_call_count (whole-game running
+    # total), so reusing the imported MAX_BRAIN_CALLS=4 here effectively meant
+    # "4 calls for the entire 150-action game" -- confirmed via a real 25-game
+    # benchmark (2026-09-07, results/unified_calib_25game_20260907.json) that
+    # brain_call_count was EXACTLY 4 in every one of the 12 games where self was
+    # found but the level was never completed, with action_counter=151 -- i.e.
+    # the last ~90 actions of every one of those runs were spent on autopilot
+    # with zero further brain consultation, even when brain_notes showed clear
+    # unresolved confusion about the game's mechanic. Raised well above 4 so the
+    # periodic trigger (MODEL_TRIGGER_INTERVAL=15) can keep firing through
+    # roughly the whole action budget instead of exhausting itself in the first
+    # ~60 actions.
+    MAX_BRAIN_CALLS_GAME = 10
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -390,8 +406,8 @@ class VisionToolsAgent(ToolsAgent):
         if self.PERIODIC_MODE == "separate":
             return self.periodic_call_count < self.MAX_PERIODIC_CALLS
         if self.PERIODIC_MODE == "stuck_only":
-            return self.goal_fail_count > self.STUCK_THRESHOLD and self.brain_call_count < MAX_BRAIN_CALLS
-        return self.brain_call_count < MAX_BRAIN_CALLS  # "shared" (default)
+            return self.goal_fail_count > self.STUCK_THRESHOLD and self.brain_call_count < self.MAX_BRAIN_CALLS_GAME
+        return self.brain_call_count < self.MAX_BRAIN_CALLS_GAME  # "shared" (default)
 
     def _periodic_counter_attr(self) -> str:
         return "periodic_call_count" if self.PERIODIC_MODE == "separate" else "brain_call_count"
@@ -414,7 +430,7 @@ class VisionToolsAgent(ToolsAgent):
         other's click coordinates. Needs a fix (e.g. constructing a fresh
         ComplexAction instead of mutating the singleton) before real use."""
         target = None
-        if blobs and self.brain_call_count < MAX_BRAIN_CALLS and (periodic_due or not self.tried_actions):
+        if blobs and self.brain_call_count < self.MAX_BRAIN_CALLS_GAME and (periodic_due or not self.tried_actions):
             target, _ = self._consult_models(grid, blobs, legal_names, self_pos=None,
                                               counter_attr=periodic_counter_attr)
         if target is None and blobs:
@@ -493,10 +509,13 @@ class VisionToolsAgent(ToolsAgent):
                           "tracked as \"you\" despite trying multiple actions (see movement laws "
                           "below). \"Move toward a landmark\" is likely not applicable here.")
 
+        cross_game_hints = self._sync_shared_action_memory(legal_names)
         prompt = (
             f"{position_line}\n\n"
             f"Your notes from earlier turns:\n{self.brain_notes or '(none yet -- this is your first consult this game)'}\n\n"
             f"Movement laws discovered so far:\n{self._movement_summary(legal_names)}\n\n"
+            f"Hints from OTHER games played this session (same action vocabulary, "
+            f"DIFFERENT game -- may not apply here, treat as a weak prior only):\n{cross_game_hints}\n\n"
             f"Vision module's scene notes:\n{self.scene_notes or '(not available this run)'}\n\n"
             f"Landmarks visible now:\n" + "\n".join(blob_lines) + "\n\n" +
             (f"Structural facts computed exactly from positions (not guesses):\n"
@@ -700,6 +719,33 @@ class VisionToolsAgent(ToolsAgent):
         # regardless of the fix above.
         blobs = _find_blobs(grid, bulk | self.self_colors | self.attached_colors | self.confirmed_bar_colors)
 
+        # Generic clustered state-graph (see state_graph.py) -- ported from
+        # llm_tools_agent.py 2026-09-07 (this class never had it wired in at all
+        # before, not even in bootstrap). Records EVERY transition every turn
+        # regardless of self-ID/branch, and replays a known path to a previously
+        # observed goal state (a levels_completed increase) the moment one is
+        # available -- purely additive: a no-op until some win has actually
+        # happened on this game (find_path returns None with an empty goal set),
+        # so it cannot make an already-working game worse.
+        sig = state_signature(blobs)
+        if self.prev_state_sig is not None and self.prev_action_name is not None:
+            self.state_graph.record_transition(self.prev_state_sig, self.prev_action_name, sig)
+        if level_changed:
+            self.state_graph.mark_goal(sig)
+            self.state_graph_path = []  # a level transition invalidates any in-flight plan
+        self.prev_state_sig = sig
+
+        if not self.state_graph_path:
+            self.state_graph_path = self.state_graph.find_path(sig) or []
+        if self.state_graph_path:
+            chosen_name = self.state_graph_path.pop(0)
+            if chosen_name in legal_names:
+                self.tried_actions.add(chosen_name)
+                self.prev_grid = grid
+                self.prev_action_name = chosen_name
+                return _CLICK_ACTION_NAME_TO_ENUM[chosen_name]
+            self.state_graph_path = []  # stale (action no longer legal) -- replan next time
+
         # periodic model check-in, independent of bootstrap/goal state -- see
         # MODEL_TRIGGER_INTERVAL's comment: without this, a game where
         # self-identification never succeeds (ka59/vc33-style mechanics) NEVER
@@ -748,13 +794,32 @@ class VisionToolsAgent(ToolsAgent):
             return _CLICK_ACTION_NAME_TO_ENUM[self.extra_step_action]
 
         if not self.current_path:
+            if self.direct_action_repeat_remaining > 0 and self.direct_action_repeat_name in legal_names:
+                # mid-commitment to a brain-suggested non-spatial action -- ported
+                # from llm_tools_agent.py 2026-09-07 (same fix, see that file's
+                # comment): this branch previously tried a direct_action_name
+                # suggestion exactly ONCE, then re-entered this block next turn
+                # and immediately re-consulted (goal_fail_count still 0), which a
+                # 13-game benchmark showed burned the whole per-game brain-call
+                # budget testing single untested actions one at a time (cd82/
+                # re86/sk48/tr87 all exhausted MAX_BRAIN_CALLS_GAME well before
+                # 150 actions, then degraded to blind landmark-picking for the
+                # rest of the game). Many puzzle mechanics (toggles, state
+                # cycles) need several presses of the SAME action to show an
+                # effect at all, not just one.
+                self.direct_action_repeat_remaining -= 1
+                chosen_name = self.direct_action_repeat_name
+                self.tried_actions.add(chosen_name)
+                self.prev_grid = grid
+                self.prev_action_name = chosen_name
+                return _CLICK_ACTION_NAME_TO_ENUM[chosen_name]
             # NOTE: this consult must NOT be gated on `if blobs:` -- empty blobs
             # (e.g. ka59: pushable objects fragment past MAX_FRAGMENTS_PER_COLOR
             # and get excluded as "bar-like" clutter) is exactly one of the stuck
             # states the periodic trigger exists to break out of. Confirmed
             # empirically: gating this on `blobs` left periodic_due=True doing
             # nothing for the entire second half of a ka59 run once blobs hit 0.
-            fresh_goal_due = bool(blobs) and self.goal_fail_count == 0 and self.brain_call_count < MAX_BRAIN_CALLS
+            fresh_goal_due = bool(blobs) and self.goal_fail_count == 0 and self.brain_call_count < self.MAX_BRAIN_CALLS_GAME
             ask_brain = fresh_goal_due or periodic_due
             target = None
             direct_action_name = None
@@ -770,6 +835,8 @@ class VisionToolsAgent(ToolsAgent):
                 # brain judged the mechanic isn't spatial pathing -- try its
                 # suggested action directly instead of routing through BFS
                 self.tried_actions.add(direct_action_name)
+                self.direct_action_repeat_name = direct_action_name
+                self.direct_action_repeat_remaining = DIRECT_ACTION_REPEAT - 1
                 self.prev_grid = grid
                 self.prev_action_name = direct_action_name
                 return _CLICK_ACTION_NAME_TO_ENUM[direct_action_name]
@@ -779,6 +846,8 @@ class VisionToolsAgent(ToolsAgent):
                              if (b["color"], b["bbox"][0], b["bbox"][2]) not in self.visited_blob_keys]
                 target = _closest_blob(unvisited, self_pos) or _closest_blob(blobs, self_pos)
             if target is not None:
+                self.direct_action_repeat_remaining = 0  # a fresh spatial plan supersedes any
+                                                           # stale non-spatial repeat commitment
                 self.current_goal_key = (target["color"], target["bbox"][0], target["bbox"][2])
                 self.current_goal_bbox = target["bbox"]  # ported 2026-09-05, see pending_arrival_check
                 # PORTED 2026-09-05 (see llm_tools_agent, 2026-09-04): NOT marked visited
