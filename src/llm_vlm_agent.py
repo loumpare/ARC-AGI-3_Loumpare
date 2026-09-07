@@ -87,9 +87,9 @@ def _parse_action(text: str, legal_names: list[str]) -> str | None:
     return None
 
 
-def _query_vlm(prompt: str, image_b64: str) -> str:
+def _query_vlm(prompt: str, image_b64: str, model_name: str = MODEL_NAME) -> str:
     resp = requests.post(OLLAMA_URL, json={
-        "model": MODEL_NAME,
+        "model": model_name,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": prompt, "images": [image_b64]},
@@ -105,6 +105,9 @@ class VLMAgent(Agent):
     """Direct vision-prompting comparison agent, no training. See module docstring."""
 
     MAX_ACTIONS = 80
+    MODEL_NAME = MODEL_NAME  # class attribute so a subclass/test harness can point this at a
+                             # different local Ollama model (e.g. qwen3.8) without editing the
+                             # module default other agents/scripts might still rely on
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -131,7 +134,7 @@ class VLMAgent(Agent):
             f"Look at the image and choose one action."
         )
         try:
-            reply = _query_vlm(prompt, image_b64)
+            reply = _query_vlm(prompt, image_b64, self.MODEL_NAME)
         except Exception as e:
             reply = ""
             print(f"[VLMAgent] Ollama query failed: {e}")
