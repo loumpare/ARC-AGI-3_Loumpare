@@ -1075,3 +1075,206 @@ just unchanged after a step — actually never receives a gradient at all),
 `brain`'s weights do change, the zero-variance check still fires correctly,
 and a multi-step loop runs without crashing. Not yet run against the real
 env — next step.
+
+## 2026-09-07 — LLM-relay track: brain-execution bugs, cross-game memory, and a human-heuristic-driven structural detector
+
+Full-day session on the parallel LLM-relay track (`src/llm_*.py`), not the
+GRPO/JEPA track above. Starting point: `UnifiedVisionAgent` (qwen3.8,
+unified perception+decision) + calibration + real GPU, real Kaggle Phase B
+score **0.06** (2026-09-06/07, best LLM-relay score to date). Local 25-game
+benchmark going in: self-identified the avatar on 13/25 games but only
+completed a level on 2-3/25 — this session's investigation was into that
+gap.
+
+### Kaggle scoring methodology (clarified, not previously documented)
+
+Pulled from `docs.arcprize.org/methodology.md` (the Kaggle competition page
+itself is a JS-rendered React app, not fetchable directly). Per-level score
+= `(human_baseline_actions / ai_actions)^2`, capped at 1.15x. Per-game score
+= weighted average of per-level scores, weight = 1-indexed level number
+(later levels count more); an uncompleted level contributes 0 to the
+numerator but its weight still counts in the denominator. **Global score =
+plain average across ALL games** (55 public / 55 private) — a game that
+never completes a single level scores a flat 0% and weighs exactly as much
+as a game scored 100%. Implication: breadth (getting ≥1 level on more
+games) is worth more than depth (shaving actions off already-won games),
+at least until most games clear at least one level.
+
+### Tooling built
+
+- `src/benchmark_agent.py` — reusable N-game local runner (self_found /
+  levels_completed / error per game), so this and future sessions stop
+  rebuilding throwaway scratchpad harnesses from zero every time.
+- `src/replay_reflection.py` — plays a game, then separately shows the
+  model several sampled frames across the WHOLE recorded trajectory + the
+  full action log, and asks it to infer the game's goal/mechanic/strategy
+  in hindsight (diagnostic only, not used in real gameplay).
+- `src/run_vlm_raw.py` / `src/run_vlm_raw_memory.py` — ablation agents:
+  qwen3.8 with zero code scaffolding (just an image + tiny history +
+  available actions), with and without a minimal single-step
+  previous-frame + action-taken memory.
+- `src/interactive_play.py` — lets a human play a local game turn by turn
+  through the conversation (replays the action log from a fresh reset each
+  call, no persistent process needed), built to capture a human's own
+  problem-solving process for comparison. Tried once live in-conversation
+  on `cd82`; too slow that way, user will record themselves playing later
+  instead and bring notes to a future session.
+
+### Root cause found: brain-call budget bug, and two related execution fixes
+
+Benchmarked the 12 games where the avatar is identified but zero levels
+ever complete (`cd82, cn04, g50t, m0r0, re86, sk48, sp80, tr87, tu93, wa30,
+ar25, bp35`). `brain_call_count` was **exactly 4** in every one, with
+`action_counter=151` — i.e. the LLM was consulted only 4 times total, then
+the agent ran on pure code-heuristic autopilot for the remaining ~90+
+actions regardless of how confused its own notes still were. Root cause:
+`VisionToolsAgent`'s periodic/fresh-goal triggers (`llm_tools_vision_agent.py`)
+gated on `ToolsAgent`'s `MAX_BRAIN_CALLS=4`, documented THERE as a
+**per-level** cap, but checked against `brain_call_count`, the **whole-game**
+running total — silently a 4-calls-per-entire-150-action-game budget, not
+4-per-level. Fixed with a separate `MAX_BRAIN_CALLS_GAME=10` class constant.
+
+Two more execution-layer bugs fixed the same day, all independently
+verified against real gameplay/frames, none reproduced as a clean win-rate
+gain in single-run local testing (see "honest results" below):
+- **Direct-action-repeat ported to the main branch**: a brain-suggested
+  non-spatial action was tried exactly once before the very next turn
+  re-consulted the brain again, burning the whole call budget testing
+  single untested actions one at a time. `ToolsAgent`'s bootstrap branch
+  already had a fix for this (`DIRECT_ACTION_REPEAT=4`, retry the same
+  suggested action 4x) but it had never been ported to either file's main
+  goal-directed branch.
+- **`state_graph.py` win-path replay wired into the main branch**: this
+  generic discrete-state-graph replay mechanism (record `(state, action) ->
+  next_state` transitions, mark goal states, replay a known path to one)
+  previously only ran during bootstrap (self not yet identified) — a win
+  discovered by BFS/brain reasoning after self-ID was never recorded for
+  replay at all within the same episode.
+- **`src/shared_game_memory.py`**: process-wide, thread-safe cross-game
+  prior on generic ACTION1-7 role (movement vs non-spatial), shared across
+  all concurrent per-game threads within one real Swarm run (confirmed via
+  `agents/swarm.py`: all ~110 games run as threads in the SAME process,
+  started nearly simultaneously). Surfaced to the brain prompt as an
+  explicitly-labeled weak hint from other games, never substituting for a
+  game's own bootstrap/calibration verification, never keyed by game_id.
+  Verified thread-safe under real concurrency (4 games in parallel threads,
+  0 crashes, correct vote aggregation, appropriately non-unanimous votes).
+- **Generic progress/stall signal + periodic trajectory reflection**: track
+  whether the current state (via `state_graph`'s own `state_signature`) has
+  already appeared in a bounded recent-history window (a cycle/stall with
+  no real progress), and the pixel-coverage trend of any already-detected
+  HUD/bar color over time — both surfaced explicitly in the brain prompt.
+  Separately, every 40 actions, sample 8 frames across the whole episode so
+  far (via the base `Agent` class's own `self.frames`, already free) + the
+  full action log, and rewrite `brain_notes` with a trajectory-grounded
+  reflection instead of the usual single-frame guess (local-dev/Ollama
+  only for now — silently skipped on the Kaggle GGUF path, which is
+  single-image only today).
+
+### Retrospective reflection experiment — and a self-correction
+
+Ran `replay_reflection.py` on 5 games (`ls20` control + `cd82/re86/sk48/tr87`,
+150 actions each). Initial read: the retrospective reflections were far more
+specific/detailed than live turn-by-turn notes, seemingly confirming
+"comprehension isn't the bottleneck." **A follow-up manual spot-check —
+actually opening extracted GIF frames and comparing them to the reflection
+text, not just re-reading the LLM's own confident prose — partially walked
+that back**: 3/4 games' claims held up under visual inspection (cd82's
+piece rotation, sk48's paint/brush trail, tr87's independent column
+cursors + glyph cycling), but `re86`'s claim was **partly fabricated** — it
+asserted a "steady downward drift, reset at step 112" that the actual
+frames (0/74/147) flatly contradict (the crosses end up almost exactly
+where they started; the real mid-run change was horizontal, not
+vertical). Revised verdict: the model reads STATIC scene structure fairly
+reliably given the full trajectory, but its causal/dynamic narrative is not
+reliably grounded and can confabulate specific, confident-sounding details
+— the same "verify before asserting" discipline applies to the model's own
+output, not just to claims made to the user.
+
+### Bare-qwen ablation (how much does the scaffolding buy?)
+
+`run_vlm_raw.py` (qwen3.8, zero code tools) on `ls20/cd82/tr87`, 80 actions
+each: 0/3 completed a level, including `ls20` (which the scaffolded agent
+wins reliably in a similar budget). Visual inspection of the `ls20` GIF:
+real spatial progress happened (the token got most of the way to the goal
+by the last frame) but very inefficiently — only 8 visually-distinct
+frames across 81 actions (most actions produced no visible change at all),
+and at the FINAL turn the model still wrote "I have no idea what each
+action does" — zero convergence on action-effect knowledge despite 80
+tries, with no persistent notes and only a 4-frame rolling state-tag
+history. Adding ONE piece of memory (`run_vlm_raw_memory.py`: previous
+frame + action taken, shown each turn) still didn't win in the same
+budget, but measurably fixed the "blind repeat" pattern: 82/82
+visually-distinct frames (vs 8/82), explicit causal reasoning even at the
+last turn ("ACTION2 produced no visible change, I'll try a different
+action"), and the HUD progress bar reached ~90% (vs barely moving) before
+plateauing around the halfway point. Independent confirmation, from a
+completely different angle (ablating everything away instead of adding
+more), of the same running theme: the real gap is *exploiting* a direction
+once found, not understanding the game.
+
+### User's own play heuristics → shared-palette region detector (best result of the day)
+
+Asked the user how they personally approach an unfamiliar ARC-AGI-3
+puzzle. Their answer, paraphrased: (1) sparse/rare colors are likely
+interactive objects, majority/bulk colors are background/path, not the
+main objects; (2) test a few movements to see what moves and how; (3) the
+mechanic is usually about relating one sparse object to ANOTHER sparse
+object (go to it, move/push/click/change it), not treating each object in
+isolation. (1) and (2) already matched the existing code closely
+(`_bulk_colors`/`_find_blobs`'s sparse/bulk split, the calibration phase) —
+good independent confirmation those are sound. (3) was a genuinely missing
+capability: built `_detect_shared_palette_regions` (union-find clustering
+of blobs by spatial proximity, then flags region pairs sharing ≥2 colors —
+a generic "legend vs workbench" signal) and `_find_unfiltered_blobs` (same
+extraction as the existing `_find_blobs` but without the
+`MAX_FRAGMENTS_PER_COLOR` cutoff, needed because `cd82`'s and `tr87`'s
+actual legend/key colors fragment past that cutoff and were invisible to
+any blob-based check before this). Wired into the already-shared
+`_structural_fact_lines` path, so all 3 agent classes' prompts pick it up
+with no extra plumbing. Two real bugs caught and fixed before trusting it
+(clustering can transitively chain far-apart fragments into one sprawling
+"region" spanning most of the grid; fixed with a span filter that only
+rejects a region large in BOTH axes at once, since a real legend/header
+strip is often thin in one axis but spans the full width/height in the
+other). Verified against real initial frames of all 25 local games: fires
+correctly and only on games with this structure (`cd82, sk48, tr87, re86,
+wa30`), silent on the rest.
+
+**Result, real 150-action 13-game benchmark
+(`results/unified_sharedpalette_13game_20260907.json`)**: still 2/13
+completed a level (`ls20`+`sp80`, same tally as the `state_graph` run), but
+a clear qualitative jump in `brain_notes` on 3-4 of the 4 closely-tracked
+stuck games: `cd82` → *"a color-matching puzzle where the center workbench
+... must be made to match the top-left target"*; `tr87` → *"the top 3x2
+grid defines pink->purple partner pairs ... I must cycle each purple
+symbol to match its pink partner per the reference grid"* (more precise
+than even the earlier whole-trajectory reflection got); `re86` → shifted
+from "collect green squares" to *"pattern-alignment puzzle ... squares may
+represent target patterns to match"*; `sk48` → more structured
+("beam-alignment puzzle", explicitly recognizes it's stalling without
+firing the beam). This is the first fix all day where improving the INPUT
+(not the budget, not the retry mechanism) visibly changed what the brain
+concludes, in a real full-budget run, on most of the tracked games — still
+didn't convert into a new win in 150 actions, but it's the strongest
+positive qualitative signal of the day, and it came directly from a
+human's stated play strategy rather than another automated ablation.
+
+### Honest bottom line
+
+Six fixes shipped and committed (`feature/brain-persistent-notes`:
+`df8aea1`, `a6ec84b`, `aa8b74e`, `7ab94b8`, `daa6391`, `780c2be`), each
+independently verified correct/safe (no regression on `ls20`'s reliable
+win across every run today), **none yet proven to raise the local win rate
+beyond existing single-run noise** — `sp80` alone accounted for the entire
+observed variance across 6 separate 12-13-game benchmark runs today (won
+in runs 1, 3 [state_graph], and 6 [shared-palette]; lost in runs 2, 4, 5),
+every other of the 12 stuck games scored 0 in literally every run,
+regardless of which fix was active. This does not mean the fixes don't
+help — each addresses a real, separately-confirmed bug or gap — it means
+12 games × 1 run each is not enough data to see a win-rate signal through
+that much noise. Two honest paths forward, not mutually exclusive: (a)
+proper repeated-trial statistics (N≥3 runs per game per config) before
+drawing more conclusions locally, or (b) judge future changes against the
+real Kaggle Phase B score (55 public games, one ground truth) instead of
+noisy local reruns. Nothing was submitted to Kaggle today.
