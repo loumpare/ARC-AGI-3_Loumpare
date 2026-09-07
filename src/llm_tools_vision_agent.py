@@ -558,7 +558,7 @@ class VisionToolsAgent(ToolsAgent):
             visited = "visited" if (b["color"], b["bbox"][0], b["bbox"][2]) in self.visited_blob_keys else "unvisited"
             blob_lines.append(f"{bid}: color={b['color']} pos={b['centroid']} size={b['size']} ({visited})")
         blob_lines = blob_lines or ["(none detected)"]
-        structural_lines = _structural_fact_lines(blobs)
+        structural_lines = _structural_fact_lines(blobs, grid, _bulk_colors(grid))
 
         if not self.scene_notes and self.eyes_call_count < MAX_EYES_CALLS:
             self.eyes_call_count += 1

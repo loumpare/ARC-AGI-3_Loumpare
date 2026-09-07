@@ -372,6 +372,39 @@ def _find_blobs(grid: np.ndarray, exclude_colors: set[int]) -> list[dict]:
     return blobs
 
 
+def _find_unfiltered_blobs(grid: np.ndarray, exclude_colors: set[int]) -> list[dict]:
+    """Same connected-component extraction as _find_blobs, but WITHOUT the
+    MAX_FRAGMENTS_PER_COLOR cutoff -- used only by
+    _detect_shared_palette_regions, which needs to see every small
+    color-accent fragment (e.g. a handful of tiny black/yellow squares
+    scattered across a legend AND a workbench) even when there are too many
+    of them to be a sane BFS-visitable "landmark" on their own. Confirmed
+    empirically (2026-09-07) that cd82's and tr87's key/legend colors are
+    EXACTLY this case -- both fragment into >MAX_FRAGMENTS_PER_COLOR pieces
+    (border accents reused across several UI squares) and so never appear
+    in the normal, landmark-filtered `blobs` list at all, silently hiding
+    the shared-palette relationship from the detector when it ran on that
+    list instead."""
+    blobs = []
+    for color in np.unique(grid):
+        color = int(color)
+        if color in exclude_colors:
+            continue
+        mask = grid == color
+        labeled, n = ndimage.label(mask)
+        for i in range(1, n + 1):
+            ys, xs = np.where(labeled == i)
+            if len(ys) < MIN_BLOB_SIZE:
+                continue
+            blobs.append({
+                "color": color,
+                "bbox": (int(ys.min()), int(ys.max()), int(xs.min()), int(xs.max())),
+                "centroid": (float(ys.mean()), float(xs.mean())),
+                "size": int(len(ys)),
+            })
+    return blobs
+
+
 def _bar_fragment_counts(grid: np.ndarray, exclude_colors: set[int]) -> dict[int, int]:
     """Fragment count for each color EXCLUDED from _find_blobs as bar-like
     (>MAX_FRAGMENTS_PER_COLOR components) -- tracked separately so a change in
@@ -508,11 +541,119 @@ def _detect_interrupted_pairs(blobs: list[dict]) -> list[dict]:
     return results
 
 
-def _structural_fact_lines(blobs: list[dict]) -> list[str]:
-    """Renders _detect_interrupted_pairs's output as prompt-ready fact lines,
-    shared by ToolsAgent and VisionToolsAgent so both state this as a GIVEN
-    fact rather than asking a brain/vision model to infer it (see
-    _detect_interrupted_pairs's docstring)."""
+REGION_PROXIMITY = 6   # max gap (pixels) for two blobs to be chained into the SAME spatial
+                        # region by _detect_shared_palette_regions -- same order of magnitude
+                        # as INTERRUPTED_GAP_MAX, reused for the same "tight cluster" intuition
+MIN_SHARED_COLORS = 2  # how many colors two regions must have in common before being reported
+                        # -- 1 shared color alone is too likely to be coincidence (e.g. two
+                        # unrelated objects both happening to be red)
+
+
+def _detect_shared_palette_regions(blobs: list[dict]) -> list[dict]:
+    """Pure geometry + color-set comparison, no LLM guess: clusters blobs into
+    spatially separate "regions" (connected components under a tight
+    proximity graph -- see REGION_PROXIMITY), then reports any pair of
+    regions that share several colors in common.
+
+    Rationale (added 2026-09-07, directly from the user's own description of
+    how THEY approach an unfamiliar ARC-AGI-3 puzzle, see
+    llm_relay_agent_experiments memory): sparse/interactive objects are
+    usually meaningful in RELATION to other sparse objects, not in isolation
+    -- most often one region is a reference/target pattern (a legend, a key)
+    and a separate region is a "workbench" that must be manipulated to match
+    it. Confirmed by hand against this session's own reflection GIFs on 3
+    different stuck games that all have exactly this shape: cd82 (a
+    black/white legend square, separate from the red-outlined rotating
+    piece, both black+white), sk48 (a vertical light-blue/maroon/teal legend
+    column, separate from the bottom target bar, same 3 colors), tr87 (a top
+    cyan/orange reference-pairs table, separate from a bottom cyan-row +
+    orange-row workbench). None of these were ever framed as a MATCHING
+    relationship in the live agent's turn-by-turn notes before this fix --
+    it treated each region's blobs as independent landmarks to visit one at
+    a time. Returns a list of {region_a: [blob indices], region_b: [...],
+    shared_colors: set} dicts."""
+    if len(blobs) < 2:
+        return []
+
+    # union-find over blobs, connecting any pair within REGION_PROXIMITY (bbox-to-bbox gap)
+    parent = list(range(len(blobs)))
+
+    def find(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    def union(i: int, j: int) -> None:
+        ri, rj = find(i), find(j)
+        if ri != rj:
+            parent[ri] = rj
+
+    def bbox_gap(a: tuple, b: tuple) -> int:
+        ar0, ar1, ac0, ac1 = a
+        br0, br1, bc0, bc1 = b
+        row_gap = max(0, max(ar0, br0) - min(ar1, br1))
+        col_gap = max(0, max(ac0, bc0) - min(ac1, bc1))
+        return max(row_gap, col_gap) if (row_gap == 0 or col_gap == 0) else row_gap + col_gap
+
+    for i in range(len(blobs)):
+        for j in range(i + 1, len(blobs)):
+            if bbox_gap(blobs[i]["bbox"], blobs[j]["bbox"]) <= REGION_PROXIMITY:
+                union(i, j)
+
+    regions: dict[int, list[int]] = {}
+    for i in range(len(blobs)):
+        regions.setdefault(find(i), []).append(i)
+
+    region_list = list(regions.values())
+    results = []
+    for x in range(len(region_list)):
+        for y in range(x + 1, len(region_list)):
+            colors_a = {blobs[i]["color"] for i in region_list[x]}
+            colors_b = {blobs[i]["color"] for i in region_list[y]}
+            shared = colors_a & colors_b
+            if len(shared) >= MIN_SHARED_COLORS:
+                results.append({"region_a": region_list[x], "region_b": region_list[y],
+                                 "shared_colors": shared})
+    return results
+
+
+MAX_REGION_SPAN_FRACTION = 0.5   # a fragment-chained "region" spanning more of the grid than
+                                   # this (in either axis) is treated as clustering noise, not a
+                                   # genuine compact cluster -- see _structural_fact_lines
+MAX_SHARED_PALETTE_FACTS = 3      # cap on how many fragment-level shared-palette lines to emit,
+                                   # most-compact-first -- keeps a busy frame's prompt bounded
+
+
+def _region_bbox_span(blobs: list[dict], idxs: list[int]) -> tuple[int, int, int, int]:
+    r0 = min(blobs[i]["bbox"][0] for i in idxs)
+    r1 = max(blobs[i]["bbox"][1] for i in idxs)
+    c0 = min(blobs[i]["bbox"][2] for i in idxs)
+    c1 = max(blobs[i]["bbox"][3] for i in idxs)
+    return r0, r1, c0, c1
+
+
+def _region_bbox_desc(blobs: list[dict], idxs: list[int]) -> str:
+    r0, r1, c0, c1 = _region_bbox_span(blobs, idxs)
+    return f"rows {r0}-{r1}, cols {c0}-{c1}"
+
+
+def _structural_fact_lines(blobs: list[dict], grid: np.ndarray | None = None,
+                            bulk: set[int] | None = None) -> list[str]:
+    """Renders _detect_interrupted_pairs's and _detect_shared_palette_regions's
+    output as prompt-ready fact lines, shared by ToolsAgent and
+    VisionToolsAgent so both state this as a GIVEN fact rather than asking a
+    brain/vision model to infer it (see each function's docstring).
+
+    `grid`/`bulk` are optional (backward compatible with old call sites) --
+    when given, ALSO runs the shared-palette check against
+    _find_unfiltered_blobs instead of just the landmark-filtered `blobs`
+    list, since key/legend colors often fragment past MAX_FRAGMENTS_PER_COLOR
+    and would otherwise never be seen by this check at all (see
+    _find_unfiltered_blobs's docstring). That richer list's indices don't
+    correspond to the blob_N ids drawn on the image, so its findings are
+    described by rough grid location instead of blob_N ids, to avoid the
+    brain misreading a location description as a clickable id."""
     lines = []
     for pair in _detect_interrupted_pairs(blobs):
         lines.append(
@@ -520,6 +661,61 @@ def _structural_fact_lines(blobs: list[dict]) -> list[str]:
             f"object, split by blob_{pair['interrupter']} sitting in the small gap ({pair['gap_size']}px) "
             f"between them -- e.g. a bar/track with a position marker on it. Computed exactly from "
             f"positions, not a guess.")
+    for rel in _detect_shared_palette_regions(blobs):
+        a_ids = ", ".join(f"blob_{i}" for i in rel["region_a"])
+        b_ids = ", ".join(f"blob_{i}" for i in rel["region_b"])
+        colors = ", ".join(str(c) for c in sorted(rel["shared_colors"]))
+        lines.append(
+            f"- Region [{a_ids}] and region [{b_ids}] are spatially SEPARATE but share color(s) "
+            f"{{{colors}}} -- a common ARC-AGI-3 pattern is one region being a reference/target "
+            f"pattern (a legend/key) and the other a workbench that must be manipulated (moved, "
+            f"pushed, clicked, rotated, or otherwise changed) to MATCH it, not two unrelated "
+            f"objects to visit independently. Computed exactly from positions/colors, not a guess "
+            f"-- but which region is the reference and which is the workbench is NOT certain.")
+    if grid is not None and bulk is not None:
+        gh, gw = grid.shape
+        fragments = _find_unfiltered_blobs(grid, bulk)
+
+        def _region_span_ok(idxs: list[int]) -> bool:
+            # excludes regions sprawling across MOST of the grid in BOTH axes at
+            # once -- that only happens when REGION_PROXIMITY-chaining
+            # transitively linked many scattered fragments together (e.g. a
+            # whole workbench of evenly-spaced small squares), not a genuine
+            # compact cluster. Deliberately only rejects large-in-BOTH-axes:
+            # a real legend/header strip is often thin in one axis but spans
+            # the full width/height in the other (e.g. cd82's top legend
+            # strip spans the whole grid width but is only ~18 rows tall) --
+            # that's still a meaningful, compact cluster, not noise.
+            r0, r1, c0, c1 = _region_bbox_span(fragments, idxs)
+            too_tall = (r1 - r0) > MAX_REGION_SPAN_FRACTION * gh
+            too_wide = (c1 - c0) > MAX_REGION_SPAN_FRACTION * gw
+            return not (too_tall and too_wide)
+
+        candidates = []
+        seen_pairs = set()
+        for rel in _detect_shared_palette_regions(fragments):
+            if not (_region_span_ok(rel["region_a"]) and _region_span_ok(rel["region_b"])):
+                continue
+            colors = tuple(sorted(rel["shared_colors"]))
+            loc_a = _region_bbox_desc(fragments, rel["region_a"])
+            loc_b = _region_bbox_desc(fragments, rel["region_b"])
+            key = (colors, loc_a, loc_b)
+            if key in seen_pairs:
+                continue
+            seen_pairs.add(key)
+            size = len(rel["region_a"]) + len(rel["region_b"])
+            candidates.append((size, colors, loc_a, loc_b))
+        # smallest/most compact matches first -- most likely to be a genuine
+        # legend-vs-workbench pair rather than incidental color reuse, and
+        # keeps the prompt from growing unbounded on a busy frame
+        candidates.sort(key=lambda c: c[0])
+        for _, colors, loc_a, loc_b in candidates[:MAX_SHARED_PALETTE_FACTS]:
+            lines.append(
+                f"- Two small, separate clusters of color(s) {{{', '.join(str(c) for c in colors)}}} "
+                f"exist at [{loc_a}] and [{loc_b}] (too fragmented/small to be individually-clickable "
+                f"landmarks, so not labeled blob_N, but their positions/colors are exact, not a "
+                f"guess) -- likely a reference-pattern-vs-workbench relationship (see above), just "
+                f"at a finer grain than the main landmark list shows.")
     return lines
 
 
@@ -1265,11 +1461,14 @@ class ToolsAgent(Agent):
                 and self.brain_call_count < MAX_BRAIN_CALLS_TOTAL)
 
     def _consult_brain(self, blobs: list[dict], legal_names: list[str],
-                        self_pos: tuple[float, float] | None) -> tuple[dict | None, str | None]:
+                        self_pos: tuple[float, float] | None,
+                        grid: np.ndarray | None = None) -> tuple[dict | None, str | None]:
         """Ask Qwen to pick a landmark or suggest a direct action. Returns
         (target_blob_or_None, direct_action_name_or_None). Works whether or not
         `self` has been identified yet (self_pos may be None) -- see
-        MODEL_TRIGGER_INTERVAL's comment for why this must not assume self is known."""
+        MODEL_TRIGGER_INTERVAL's comment for why this must not assume self is known.
+        `grid` is optional, only used to enrich _structural_fact_lines with the
+        finer-grained shared-palette check (see that function's docstring)."""
         id_map = {}
         blob_lines = []
         for i, b in enumerate(blobs):
@@ -1284,7 +1483,8 @@ class ToolsAgent(Agent):
                 status = "unvisited"
             blob_lines.append(f"{bid}: color={b['color']} pos={b['centroid']} size={b['size']} ({status})")
         blob_lines = blob_lines or ["(none detected)"]
-        structural_lines = _structural_fact_lines(blobs)
+        bulk = _bulk_colors(grid) if grid is not None else None
+        structural_lines = _structural_fact_lines(blobs, grid, bulk)
 
         effects_lines = []
         for e in self.effects_log:
@@ -1383,7 +1583,7 @@ class ToolsAgent(Agent):
         budget_ok = (self.brain_calls_this_level < MAX_BRAIN_CALLS
                      and self.brain_call_count < MAX_BRAIN_CALLS_TOTAL)
         if blobs and budget_ok and (self._periodic_due() or not self.tried_actions):
-            target, _ = self._consult_brain(blobs, legal_names, self_pos=None)
+            target, _ = self._consult_brain(blobs, legal_names, self_pos=None, grid=grid)
         if target is None and blobs:
             unvisited = [b for b in blobs
                          if (b["color"], b["bbox"][0], b["bbox"][2]) not in self.visited_blob_keys]
@@ -1685,7 +1885,7 @@ class ToolsAgent(Agent):
                 # periodic check-in even during bootstrap -- see MODEL_TRIGGER_INTERVAL: a
                 # game where self is never identified (ka59/vc33-style mechanics) would
                 # otherwise NEVER reach the brain at all, confirmed empirically 2026-09-03
-                _, direct_action_name = self._consult_brain(blobs, legal_names, self_pos=None)
+                _, direct_action_name = self._consult_brain(blobs, legal_names, self_pos=None, grid=grid)
                 if direct_action_name is not None:
                     self.tried_actions.add(direct_action_name)
                     self.direct_action_repeat_name = direct_action_name
@@ -1762,7 +1962,7 @@ class ToolsAgent(Agent):
             target = None
             direct_action_name = None
             if ask_brain:
-                target, direct_action_name = self._consult_brain(blobs, legal_names, self_pos)
+                target, direct_action_name = self._consult_brain(blobs, legal_names, self_pos, grid=grid)
 
             if direct_action_name is not None:
                 # brain judged the mechanic isn't spatial pathing -- try its
