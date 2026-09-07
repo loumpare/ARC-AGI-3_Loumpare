@@ -126,6 +126,22 @@ def _find_gguf() -> Path:
     raise FileNotFoundError(f"{_GGUF_FILENAME} not found under any of: {_GGUF_SEARCH_ROOTS}")
 
 
+def _gpu_offload_available() -> bool:
+    """True only when the bundled llama-cpp-python wheel was actually built with
+    CUDA support AND a GPU is present at runtime -- both the brain (this module)
+    and the vision module (llm_tools_vision_agent._query_eyes_gguf) gate their
+    GPU offload on this, since the default Kaggle CPU-only wheel has no GPU
+    kernels compiled in at all (n_gpu_layers would silently be a no-op there,
+    not an error) and the vision path is deliberately GPU-only (see that
+    module's comment on _VISION_GGUF_FILENAME for why a CPU fallback there
+    would blow the latency budget)."""
+    try:
+        import llama_cpp
+        return bool(llama_cpp.llama_cpp.llama_supports_gpu_offload())
+    except Exception:
+        return False
+
+
 def _get_local_llama():
     global _llama_singleton
     if _llama_singleton is not None:
@@ -134,7 +150,16 @@ def _get_local_llama():
         if _llama_singleton is None:  # re-check: another thread may have won the race
             from llama_cpp import Llama
             path = _find_gguf()
+            # offload to GPU when the wheel/hardware actually support it (real
+            # RTX PRO 6000 benchmark, notebooks/gpu_bench/: qwen3.8-27B went from
+            # ~170s/call CPU to ~2-6s/call GPU -- this 7B brain model is smaller,
+            # so the same offload should help at least as much); falls back to
+            # n_gpu_layers=0 (pure CPU, the only path tested/used before
+            # 2026-09-06) when no CUDA-enabled wheel/GPU is present, e.g. local
+            # dev without Ollama, or a Kaggle run without the GPU accelerator.
+            n_gpu_layers = -1 if _gpu_offload_available() else 0
             _llama_singleton = Llama(model_path=str(path), n_ctx=4096,
+                                      n_gpu_layers=n_gpu_layers,
                                       n_threads=_usable_cpu_count(), verbose=False)
         return _llama_singleton
 
@@ -767,6 +792,12 @@ class ToolsAgent(Agent):
         self.prev_self_pos: tuple[float, float] | None = None
         self.prev_levels_completed: int | None = None
         self.last_raw_response = ""
+        self.calibration_actions: list[str] = []  # fixed once, from turn 1's legal_names -- see
+                                                     # the calibration block in _choose_action_impl
+        self.calibration_step = 0
+        self.calibration_done = False
+        self.calibration_reset_pending = False  # True right after issuing calibration's own
+                                                  # internal RESET, waiting for that frame to land
 
     def is_done(self, frames: list[FrameData], latest_frame: FrameData) -> bool:
         try:
@@ -1306,6 +1337,87 @@ class ToolsAgent(Agent):
             self.recent_action_log.clear()
         self.prev_levels_completed = latest_frame.levels_completed
         self._update_from_last_transition(grid)
+
+        # Calibration phase (2026-09-06, user-requested): on a genuinely fresh
+        # game, deterministically try every non-click action TWICE before doing
+        # anything goal-directed, then RESET back to a clean start -- replaces
+        # discovering movement laws opportunistically (whichever action the old
+        # round-robin happened to try first) with a guaranteed, complete pass.
+        # By the time calibration ends, action_deltas holds every action's real
+        # effect, and a game with NO rigid movement avatar at all is known for
+        # certain (not just inferred slowly) before any real, goal-directed
+        # action is spent -- see llm_tools_agent's "not self.self_colors"
+        # bootstrap branch below, which now starts with tried_actions already
+        # fully populated in that case and routes straight to click/direct-
+        # action mode instead of re-discovering the same dead end.
+        # Verified via arcengine's own source (ARCBaseGame.handle_reset):
+        # `elif self._action_count == 0 or self._state == GameState.WIN:
+        # full_reset() else: level_reset()` -- a RESET here does NOT lose
+        # levels_completed/level progress (level_reset only, since action_count
+        # is already > 0 by calibration's end and the game isn't won -- `main()`
+        # would already have stopped calling choose_action at all if it were,
+        # via is_done(), so latest_frame.state is never WIN here). Only a
+        # full_reset (gated on action_count==0) would lose progress, which
+        # never applies once calibration has taken at least one action.
+        if not self.calibration_done:
+            if not self.calibration_actions:
+                # first-ever turn: fix the calibration list once, from whatever
+                # non-click actions are legal right now. Empty (click-only game,
+                # e.g. vc33/s5i5) -- nothing to calibrate, skip straight through
+                # without wasting a RESET.
+                self.calibration_actions = [n for n in legal_names if n != "ACTION6"]
+            if not self.calibration_actions:
+                self.calibration_done = True
+            elif self.calibration_reset_pending:
+                # calibration's own RESET just landed -- same stale-state
+                # bookkeeping the top-of-function NOT_PLAYED/GAME_OVER branch
+                # does (position/plan state is stale post-reset), but
+                # self_colors/action_deltas learned during calibration are
+                # deliberately KEPT, not cleared.
+                self.prev_grid = None
+                self.prev_action_name = None
+                # Unlike the top-of-function NOT_PLAYED/GAME_OVER branch, self_bbox is
+                # NOT nulled to None here -- that branch relies on prev_self_pos as a
+                # fallback (see "self already known" branch below), which is safe there
+                # because self was always found many real turns into an uninterrupted
+                # playthrough BEFORE any reset could fire, so prev_self_pos already held
+                # a valid value. Calibration breaks that assumption: self can be found
+                # and immediately followed by calibration's own RESET with ZERO real
+                # turns in between, so prev_self_pos is still its __init__ default of
+                # None -- confirmed the hard way via a real Kaggle Phase A run
+                # (2026-09-07): `_closest_blob(unvisited, self_pos)` crashed with
+                # "'NoneType' object is not subscriptable" on the very first
+                # post-calibration goal-directed turn. Recompute a fresh bbox directly
+                # from the just-arrived post-reset grid instead of leaving both
+                # self_bbox AND prev_self_pos empty.
+                self.self_bbox = _raw_mask_bbox(grid, self.self_colors) if self.self_colors else None
+                self.prev_self_pos = _bbox_centroid(self.self_bbox) if self.self_bbox else None
+                self.current_path = []
+                self.current_goal_key = None
+                self.current_goal_bbox = None
+                self.pending_arrival_check = None
+                self.pending_arrival_action = None
+                self.extra_step_budget = 0
+                self.extra_step_action = None
+                self.recent_action_log.clear()
+                self.direct_action_repeat_remaining = 0
+                self.prev_state_sig = None
+                self.state_graph_path = []
+                self.calibration_reset_pending = False
+                self.calibration_done = True
+                # fall through to the normal logic below for THIS turn's real choice
+            elif self.calibration_step < 2 * len(self.calibration_actions):
+                chosen_name = self.calibration_actions[self.calibration_step % len(self.calibration_actions)]
+                self.calibration_step += 1
+                self.tried_actions.add(chosen_name)
+                self.prev_grid = grid
+                self.prev_action_name = chosen_name
+                return _CLICK_ACTION_NAME_TO_ENUM[chosen_name]
+            else:
+                self.calibration_reset_pending = True
+                self.prev_grid = grid
+                self.prev_action_name = None  # RESET isn't a movement action -- nothing to diff it against
+                return GameAction.RESET
 
         if not level_changed:
             if self.pending_arrival_check is not None:

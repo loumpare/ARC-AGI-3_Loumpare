@@ -1,8 +1,13 @@
 """Unified vision+brain agent: ONE multimodal model call does both scene
 perception AND decision (no separate Gemma-describes/Qwen-decides relay).
-Diagnostic-only comparison variant, not for the real submission -- built to
-answer "could one capable VLM just do everything" empirically instead of by
-assumption, same spirit as this project's other comparison scripts.
+Originally a diagnostic-only comparison variant (built to answer "could one
+capable VLM just do everything" empirically instead of by assumption) --
+promoted to Kaggle-deployable 2026-09-06 once a CUDA-enabled llama-cpp-python
+build + our own bundled qwen3.8-27B GGUF+mmproj made this model's ~170s/call
+CPU latency (measured locally) drop to ~2-6s/call on the competition's real
+RTX PRO 6000 GPU (see notebooks/gpu_bench/ and llm_relay_agent_experiments
+memory) -- fast enough to actually use, unlike the CPU-only path this was
+stuck behind before.
 
 REPÈRE FR -- CE FICHIER NE CONTIENT AUCUN CODE DE DÉPLACEMENT.
 `UnifiedVisionAgent` hérite de `VisionToolsAgent` (src/llm_tools_vision_agent.py)
@@ -18,8 +23,20 @@ le 2026-09-05 pour que ce soit consultable/versionnable dans le repo."""
 import queue
 import threading
 
-from llm_tools_agent import OLLAMA_URL, _structural_fact_lines
-from llm_tools_vision_agent import VisionToolsAgent, _grid_to_image_b64
+from llm_tools_agent import (
+    OLLAMA_URL,
+    _gpu_offload_available,
+    _pending_brain_threads,
+    _pending_brain_threads_lock,
+    _structural_fact_lines,
+)
+from llm_tools_vision_agent import (
+    VisionToolsAgent,
+    _get_local_vision_llama,
+    _grid_to_image_b64,
+    _ollama_available,
+    _vision_llama_lock,
+)
 
 UNIFIED_SYSTEM_PROMPT = """\
 You are the full perception+decision module for a game-playing agent. You are shown \
@@ -59,6 +76,8 @@ name (e.g. "ACTION3") -- whichever you're recommending -- and nothing else.
 
 
 def _query_unified(image_b64: str, user_prompt: str, model_name: str, timeout_s: int) -> str:
+    # Local dev only: Ollama-served qwen3.8. Kaggle (no Ollama, no internet)
+    # uses _query_unified_gguf below instead -- see _query_unified_bounded.
     import requests
     resp = requests.post(OLLAMA_URL, json={
         "model": model_name,
@@ -73,16 +92,62 @@ def _query_unified(image_b64: str, user_prompt: str, model_name: str, timeout_s:
     return resp.json()["message"]["content"]
 
 
+def _query_unified_gguf(image_b64: str, user_prompt: str) -> str:
+    """Kaggle GPU path: same bundled qwen3.8-27B GGUF+mmproj singleton as
+    llm_tools_vision_agent._query_eyes_gguf (one shared Llama instance --
+    perception and decision are the SAME model call here, so there's only ever
+    one vision-capable model loaded regardless of which agent variant is
+    running). GPU-only by the same reasoning as that function's docstring: a
+    CPU run of this model measured ~170s/call locally, vs ~2-6s/call on the
+    real RTX PRO 6000 (notebooks/gpu_bench/, 2026-09-06)."""
+    llm, handler = _get_local_vision_llama()
+    with _vision_llama_lock:
+        resp = handler(
+            llama=llm,
+            messages=[
+                {"role": "system", "content": UNIFIED_SYSTEM_PROMPT},
+                {"role": "user", "content": [
+                    {"type": "text", "text": user_prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_b64}"}},
+                ]},
+            ],
+            max_tokens=300,
+            temperature=0.3,
+            reasoning_effort="low",  # see llm_tools_vision_agent._query_eyes_gguf's comment --
+                                      # measured as fast as (not slower than) "xhigh" on the real GPU
+        )
+    return resp["choices"][0]["message"]["content"]
+
+
 def _query_unified_bounded(image_b64: str, user_prompt: str, model_name: str, timeout_s: int) -> str:
+    """Dispatches to Ollama (local dev) or the bundled GGUF (Kaggle GPU),
+    same pattern as llm_tools_vision_agent._query_eyes -- and reuses THAT
+    module's pending-thread list/lock so one atexit drain hook (see
+    llm_tools_agent._drain_pending_brain_threads) covers brain, eyes, and
+    unified calls alike instead of a third copy of that machinery."""
+    if _ollama_available():
+        def call():
+            return _query_unified(image_b64, user_prompt, model_name, timeout_s)
+    else:
+        if not _gpu_offload_available():
+            raise RuntimeError("neither Ollama nor GPU offload available -- UnifiedVisionAgent "
+                                "needs either a local Ollama+qwen3.8 (dev) or a real GPU for the "
+                                "bundled qwen3.8 GGUF (Kaggle); CPU-only fallback deliberately not "
+                                "attempted (see _query_unified_gguf docstring)")
+        def call():
+            return _query_unified_gguf(image_b64, user_prompt)
+
     outcome: queue.Queue = queue.Queue(maxsize=1)
 
     def worker() -> None:
         try:
-            outcome.put(("ok", _query_unified(image_b64, user_prompt, model_name, timeout_s)))
+            outcome.put(("ok", call()))
         except Exception as e:  # noqa: BLE001
             outcome.put(("err", e))
 
     t = threading.Thread(target=worker, daemon=True)
+    with _pending_brain_threads_lock:
+        _pending_brain_threads.append(t)
     t.start()
     try:
         status, payload = outcome.get(timeout=timeout_s + 5)

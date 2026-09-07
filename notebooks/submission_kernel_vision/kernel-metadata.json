@@ -1,0 +1,18 @@
+{
+  "id": "loumitrmas/arc-agi-3-vision-submission",
+  "title": "ARC AGI 3 Vision Submission",
+  "code_file": "submission.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": "true",
+  "enable_gpu": "true",
+  "enable_tpu": "false",
+  "enable_internet": "false",
+  "machine_shape": "NvidiaRtxPro6000",
+  "dataset_sources": ["loumitrmas/llama-cpp-python-cuda-blackwell"],
+  "competition_sources": ["arc-prize-2026-arc-agi-3"],
+  "kernel_sources": [],
+  "model_sources": [
+    "loumitrmas/qwen3-8-27b-gguf/Gguf/gguf/1"
+  ]
+}
