@@ -1660,3 +1660,93 @@ belongs to a different, closed-model system and should not be expected
 here. Vendored clone (with the one-line patch) left at
 `/tmp/.../scratchpad/vendor/duck-harness` -- not committed to this repo,
 purely an investigation artifact, MIT-licensed third-party code.
+
+## 2026-09-09 — Level-skip + cross-game battery on the real Duck Harness
+
+User: "continue les tests sur plusieurs niveaux avec set level et sur
+d'autres jeux aussi" -- test the real Duck Harness starting mid-game
+(later ls20 levels directly) and on other games (tr87, cd82), not just
+ls20 from level 0.
+
+**Built a level-jump hook for TAAF's `GameAPI`**, same underlying mechanism
+as this project's own `src/level_skip_harness.py` (`arcengine`'s
+`ARCBaseGame.set_level(index)` + re-render + republish a frame so the next
+`observation_space` read reflects it), adapted as a `LevelSkipGameAPI`
+subclass overriding `_start_game` to call the real startup then jump.
+
+**Validated the jump actually works, not just assumed**: TAAF's own
+`actions_per_level` diagnostic field looked like it hadn't moved (still
+attributing actions to slot 0) after jumping to level index 1 -- turned
+out to be a red herring: that field naively attributes by `levels_completed`
+value, which our jump doesn't touch (score-wise it's still "0 levels
+completed", regardless of which level's sprites are rendered). Confirmed
+the ACTUAL raw grid the harness received matches our own already-validated
+`level_skip_harness.jump_to_level`'s level-1 grid exactly
+(`np.array_equal` on the real board, not a randomized `hash()` -- caught
+and fixed a mistake mid-check where Python's per-process hash
+randomization on bytes made two genuinely-identical grids compare as
+"different" until switched to a direct array comparison), and does NOT
+match level 0's grid. The level-skip mechanism works correctly.
+
+**Also found and used `HarnessSolver.max_runtime_s_per_game`** (a real,
+documented field, not something added) as a hard wall-clock cap per game
+-- necessary because two earlier attempts each stalled for 50+ minutes on
+a single turn with no forward progress (confirmed via fresh transcript
+timestamps that it was still genuinely working, not hung, just very slow
+mid-turn reasoning). Set to 600s (10 min) per game for this battery so one
+stuck game can't block the rest indefinitely.
+
+**Battery result (local qwen3.8, 60-action cap, 600s wall-clock cap,
+each a single run -- not repeated trials, same noise caveat as always):**
+
+| Game | Start level | Actions taken | Wall time | Levels | Notes |
+|---|---|---|---|---|---|
+| ls20 | 1 (2nd level, cold start) | 5 | 10m43s | 0/7 | near-zero progress |
+| ls20 | 2 (3rd level, cold start) | 4 | 10m00s | 0/7 | hit a real Ollama read-timeout mid-run |
+| tr87 | 0 (natural start) | 23 | 10m12s | 0/6 | no level won |
+| cd82 | 0 (natural start) | 23 | 10m12s | 0/6 | no level won |
+
+**Honest findings**:
+1. **ls20 levels 2 and 3, entered cold via level-skip, were dramatically
+   slower per-action** (~120-150s/action) than tr87/cd82's fresh level-0
+   starts (~26s/action) or ls20's own level 0 (~19s/action across earlier
+   runs). Two competing explanations, NOT disentangled by this battery:
+   (a) jumping in cold loses whatever mechanic-understanding the model
+   would have carried forward from actually playing level 1 first
+   (their own prompt explicitly encourages "Cross-level notes"), or
+   (b) ls20's levels 2/3 layouts are just intrinsically much harder
+   puzzles regardless of how they're reached. The EARLIER interrupted
+   150-action natural-progression trial (2026-09-08 entry) also stalled
+   hard once past level 1 with zero further progress across 84+ actions
+   -- consistent with (b) being at least part of the story, since that
+   run reached level 2 "warmed up" and still got stuck. Don't assert
+   which explanation dominates without a cleaner controlled test (e.g.
+   ls20 level-skip to level 1 preceded by a synthetic "already solved
+   level 0" note injected into history, vs. not).
+2. **First real cross-game data for Duck Harness on this project's other
+   two tracked games**: 0/6 on both tr87 and cd82 within budget, matching
+   this project's own agents' long-standing struggle with those two
+   specific games (see [[llm_relay_agent_experiments]] -- `cd82`'s
+   non-Cartesian rotational-selector mechanic and `tr87`'s
+   reference-grid matching mechanic were already flagged as structurally
+   hard for OUR heuristics; this is the first evidence they're also hard
+   for a strong general-purpose LLM reasoning approach, not just for
+   heuristics that assume simple avatar movement).
+3. `max_runtime_s_per_game` is a good practical tool for any future local
+   testing of this harness -- bounds wall-clock cost per game without
+   needing to guess an action-count cap that might cut off a genuinely
+   slow-but-working run too early.
+
+### Honest bottom line
+
+The level-skip mechanism works and is now reusable for future targeted
+testing. But this battery raises more questions than it closes: level 2+
+of ls20 remains an unsolved wall for this local-model + harness
+combination whether reached naturally or directly, and Duck Harness does
+not show an advantage over our own agents on tr87/cd82 specifically --
+both struggle equally. Given how much of today was already spent on this
+whole Duck Harness investigation (four separate live-testing sessions), a
+natural stopping point for now: further work here needs either a cleaner
+controlled experiment design (isolating cold-start vs. intrinsic
+difficulty) or a decision to move on to a different track, not more ad hoc
+single runs.
