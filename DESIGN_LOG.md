@@ -1421,3 +1421,58 @@ agent's core loop is implemented and unit-verified but has not yet
 completed a single real refinement cycle locally — its next step is
 infrastructure (faster/smaller refinement model), not more agent logic,
 before it can be judged fairly. Nothing was submitted to Kaggle today.
+
+### Follow-up, same day: coder-model retry (world model) + baseline-matched test (REPL)
+
+User confirmed: keep pushing on both, but prioritize the REPL/Duck-Harness
+track specifically since it's the real current #1 leaderboard strategy.
+
+**World model, retried with `qwen2.5-coder:7b` instead of `qwen3.8` (27B)
+for the refinement call only:** dramatic latency fix — 6/6 refinement calls
+completed in 2.7-6.5s each (vs. 4/4 timing out at 240s before), full
+60-action ls20 run in 25.7s (was 1208.7s). **But this surfaced a DIFFERENT,
+more fundamental problem, not solved by fixing latency**: traced the actual
+learning curve call-by-call and printed the final accepted function — the
+coder model's `predict_next_ascii` writes `# No change: return ascii_grid`
+for literally every real action in this game's action space (ACTION1-6),
+and instead spends its effort hallucinating handlers for action names that
+don't exist in this game at all (`"CLICK"`, `"MOVE_UP"`, `"MOVE_DOWN"`,
+`"MOVE_LEFT"`, `"MOVE_RIGHT"`) — dead code that never executes. The
+regression guard correctly never rejected any of these versions because
+none of them ever score worse than identity (they ARE identity for every
+action that's ever actually called). The reported 93.9-98.7% "soft match"
+is exactly what an identity/no-op function gets for free on a mostly-static
+64x64 grid where only a small region changes per frame — not evidence of
+learning. **Honest conclusion: the coder-model swap fixed the engineering
+problem (latency) but did not fix the actual capability problem (the model
+never engages with real transition dynamics)** — next lever here isn't
+speed anymore, it's prompt quality (e.g. showing an explicit computed diff
+of changed cells between before/after instead of two full walls of grid
+text and expecting the model to spot the change itself) or a stronger model
+for this specific abstraction task. Not attempted further today, per the
+user's explicit priority on the REPL track.
+
+**REPL agent, re-tested at the SAME 150-action budget as the baseline** (the
+earlier comparison used 21-60 actions, not a fair test) — added a concrete
+worked-example code block to the system prompt first, targeting the
+recurring `'int' object is not subscriptable` bbox-format confusion.
+Result on `ls20`/`tr87`/`cd82`, 150 actions each: **0/7, 0/6, 0/6 levels
+completed — 0 wins on all three, matching baseline on cd82/tr87 but WORSE
+than baseline on `ls20` specifically (baseline: 1/7 levels)**. Could not
+precisely re-measure the exec-error rate for this run (a leftover `| tail
+-200` on the launch command truncated most of the mid-run log before it
+reached the output file — a self-inflicted logging mistake, not a result);
+per-action latency did drop from ~4.3s to ~2.0s versus the pre-fix run,
+suggestive but not proof the worked example reduced failed exec calls.
+**Honest bottom line: our from-scratch local adaptation of Duck Harness does
+not yet match, let alone beat, our own existing baseline at equal budget**,
+despite Duck Harness itself being the real #1 on the actual Kaggle
+leaderboard. Most likely explanations, not yet isolated: (a) Tufa Labs runs
+their own production Qwen 3.6 27B FP8 inference server, not a
+heavily-loaded local Ollama instance sharing a GPU with everything else on
+this machine; (b) documented simplifications in our port (no live
+mid-snippet real-env re-stepping, simpler sandbox, no attached image per
+turn — Duck Harness's own writeup credits gains partly to multimodality,
+which this port deliberately left out for a first test). Attaching an image
+per turn (matching `llm_vlm_agent.py`'s existing renderer) is the most
+direct untried lever if this track continues.

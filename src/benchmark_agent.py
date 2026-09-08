@@ -71,6 +71,10 @@ def run_one(agent_cls, game_id: str, max_actions: int, arcade) -> dict:
             "brain_call_count": getattr(agent, "brain_call_count", None),
             "brain_notes": getattr(agent, "brain_notes", ""),
             "current_goal_key": str(getattr(agent, "current_goal_key", None)),
+            "refine_calls": getattr(agent, "refine_calls", None),
+            "exact_match_rate": getattr(agent, "exact_match_rate", None),
+            "soft_match_rate": getattr(agent, "soft_match_rate", None),
+            "last_refine_error": getattr(agent, "last_refine_error", None),
             "error": None,
         })
     except Exception as e:
