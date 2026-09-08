@@ -45,7 +45,12 @@ from agents.agent import Agent
 from llm_repl_agent import _CLICK_NAME_TO_ENUM, _CLICK_NAMES, _grid_ascii
 
 OLLAMA_URL = "http://localhost:11434/api/chat"
-MODEL_NAME = "qwen3.8:latest"
+MODEL_NAME = "qwen2.5-coder:7b"  # switched from qwen3.8 (27B general) 2026-09-08 after 4/4
+                                  # refinement calls timed out at 240s locally with the full
+                                  # two-full-grid prompt -- this task is pure code generation, a
+                                  # smaller code-specialized model should both respond faster
+                                  # (7B vs 27B) and be a better fit for the task itself; not yet
+                                  # re-verified, see DESIGN_LOG.md 2026-09-08
 MAX_ACTIONS = 150
 MAX_REFINE_CALLS = 6         # LLM calls spent maintaining/refining the world-model code -- kept
                               # small (vs. the paper's unbounded Codex session) because a single

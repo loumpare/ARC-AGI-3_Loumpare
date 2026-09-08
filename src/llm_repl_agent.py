@@ -192,6 +192,27 @@ turns WITHOUT you seeing the intermediate frames or writing more code -- only \
 batch actions you are confident about; if you need to re-observe after each \
 step, queue exactly one.
 
+Worked example (note: `bbox` is a FLAT list of 4 ints [row_min,col_min,row_max,col_max], \
+NOT a list of corner points -- indexing bbox[0] gives an int, not a point):
+```python
+seg = current_frame.segmentation
+nodes = seg["nodes"]
+# find the smallest non-background node as a candidate interactive object
+candidates = [n for n in nodes if n["color"] not in seg["background_colors"]]
+target = min(candidates, key=lambda n: n["pixels"]) if candidates else None
+if target is not None:
+    row_min, col_min, row_max, col_max = target["bbox"]
+    center_row = (row_min + row_max) // 2
+    center_col = (col_min + col_max) // 2
+    print(f"targeting node {{target['id']}} color={{target['color']}} at ({{center_row}},{{center_col}})")
+    if "ACTION6" in valid_actions:
+        action([{{"action": "ACTION6", "row": center_row, "col": center_col}}])
+    else:
+        action([valid_actions[0]])
+else:
+    action([valid_actions[0]])
+```
+
 Rules:
 - Prefer `.segmentation` over reading `.ascii` cell by cell; use `.ascii` only \
 to check a small specific region.
