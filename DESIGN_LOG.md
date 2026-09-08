@@ -1476,3 +1476,83 @@ turn — Duck Harness's own writeup credits gains partly to multimodality,
 which this port deliberately left out for a first test). Attaching an image
 per turn (matching `llm_vlm_agent.py`'s existing renderer) is the most
 direct untried lever if this track continues.
+
+### Second follow-up, same day: multi-round tool loop + real root-cause bug hunt
+
+User confirmed ("yes") both proposed fixes: matching Duck Harness's sampling
+params and, more importantly, letting the model call the Python tool
+MULTIPLE times per decision turn (their `LOCAL_ANALYZER_TOOL_STEPS`,
+default 12 in their source) instead of once — a real architectural gap
+this port had, missed despite already having read the exact prompt line
+saying so ("You can call the python tool as many times as you want per
+step") when first building it.
+
+**Implemented in `src/llm_repl_agent.py`**: `MAX_TOOL_CALLS_PER_TURN`
+(started at 4, cut to 2 after cost measurements below), stdout capture via
+`contextlib.redirect_stdout` so each round's output/error feeds into the
+next round's prompt within the SAME turn, sampling params changed to match
+their Qwen defaults (temperature 0.6, top_p 0.95, top_k 20, was an
+arbitrary 0.4).
+
+**First smoke test (4 rounds/turn) was a regression, not an improvement**:
+1229.8s for just 15 actions (vs. ~65-260s before), 26 exec errors logged.
+New error types appeared that had never shown up before: `NameError` for
+names like `cell`, `get_cell`, `char_to_color`, `ascii_str` — the model was
+referencing variables/functions it had defined in an EARLIER round's code
+as if the session persisted, even though the prompt said otherwise. Showing
+prior-round code as context apparently reinforced the wrong mental model
+("this is a continuing REPL") instead of the intended one. Also found: `ord`
+was missing from the sandbox's safe-builtins whitelist, breaking any
+ascii-char/color-id conversion outright.
+
+**Fixed**: `MAX_TOOL_CALLS_PER_TURN` cut 4→2 (cost control), added `ord`/
+`chr` to safe builtins, and made the "no persistence between rounds" prompt
+language much more explicit + relabeled the shown transcript as "context
+only, do NOT reference these names."
+
+**Re-test after that fix: real speedup (1229.8s→156.8s) and the
+cross-round-confusion errors were gone, but 16 of the remaining 17 errors
+were still the exact same `TypeError: 'int' object is not subscriptable`
+from before the original "worked example" fix** — meaning that earlier fix
+had never actually worked. Traced the ACTUAL generated code (not
+inference) via a direct instrumented run and found the real cause for the
+first time: the model was writing `n["hash"][:8]` to truncate a shape hash
+for display — a completely reasonable assumption that a field called
+"hash" is a string-like digest — but `_shape_hash()` returned a raw Python
+`int`, which isn't subscriptable. **This was never actually a bbox-format
+problem** (the earlier hypothesis from the first REPL agent build), it was
+a raw-int-vs-string schema mismatch the whole time; the bbox worked example
+added earlier was solving a problem that wasn't the real one. **Fixed**:
+`_shape_hash()` now returns a hex string (`format(..., "016x")`) instead of
+a raw int — same position-independent shape signature, just sliceable like
+the model already expected. Also added `hasattr`/`getattr` to safe builtins
+(found via the same trace) and later `repr` (found in the final run below).
+
+**Final 150-action, 3-game comparative run (`ls20`/`tr87`/`cd82`, matching
+the baseline's budget), all fixes applied**, ~52 min total wall time:
+
+| Game | Exec errors (out of 150 actions, ≤2 rounds each) | Levels | Won |
+|---|---|---|---|
+| ls20 | 1 | 0/7 | No |
+| tr87 | 15 (mostly `ImportError: __import__ not found` — model kept trying to `import` despite the rule against it) | 0/6 | No |
+| cd82 | 5 | 0/6 | No |
+
+**Honest bottom line**: the exec-error rate dropped from effectively 100%
+(the original bbox/hash misdiagnosis, then the multi-round regression) down
+to roughly 1-10% per game — three real, confirmed bugs fixed
+(cross-round variable confusion, the hash int/string schema mismatch, and
+several missing sandbox builtins), each independently verified via direct
+instrumented traces of actual generated code rather than guessed. **But
+none of this moved the actual outcome**: still 0 levels completed on all
+three games, identical to every earlier attempt today, and still worse
+than the existing baseline on `ls20` specifically (which reliably gets
+1/7 there). This matches a pattern already seen elsewhere in this
+project's LLM-relay track (see [[llm_relay_agent_experiments]]): fixing
+real, confirmed execution/mechanics bugs is necessary but has repeatedly
+NOT been sufficient to close a win-rate gap — the comprehension/strategy
+gap (does the model actually understand what to DO once it can reliably
+inspect state) looks like the dominant remaining bottleneck for this port,
+not remaining exec-error noise. The untried image-attachment lever from
+the previous entry is still the most likely next thing to actually move
+outcomes, since Duck Harness's own writeup credits it as a real
+contributor, not just a nice-to-have.
