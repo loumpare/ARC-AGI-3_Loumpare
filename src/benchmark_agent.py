@@ -39,6 +39,12 @@ def _agent_class(name: str):
     if name == "unified":
         from llm_unified_vision_agent import UnifiedVisionAgent
         return UnifiedVisionAgent
+    if name == "repl":
+        from llm_repl_agent import ReplToolsAgent
+        return ReplToolsAgent
+    if name == "worldmodel":
+        from llm_world_model_agent import WorldModelAgent
+        return WorldModelAgent
     raise ValueError(f"unknown agent {name!r}")
 
 
@@ -53,9 +59,10 @@ def run_one(agent_cls, game_id: str, max_actions: int, arcade) -> dict:
     try:
         agent.main()
         latest = agent.frames[-1] if agent.frames else None
+        self_colors = getattr(agent, "self_colors", None)
         result.update({
-            "self_found": bool(agent.self_colors),
-            "self_colors": sorted(agent.self_colors),
+            "self_found": bool(self_colors) if self_colors is not None else None,
+            "self_colors": sorted(self_colors) if self_colors else [],
             "levels_completed": int(latest.levels_completed) if latest else None,
             "win_levels": int(latest.win_levels) if latest else None,
             "won": bool(latest and latest.levels_completed >= latest.win_levels and latest.win_levels > 0),
@@ -75,7 +82,7 @@ def run_one(agent_cls, game_id: str, max_actions: int, arcade) -> dict:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--agent", choices=["tools", "vision", "unified"], default="unified")
+    ap.add_argument("--agent", choices=["tools", "vision", "unified", "repl", "worldmodel"], default="unified")
     ap.add_argument("--games", nargs="*", default=ALL_GAMES)
     ap.add_argument("--actions", type=int, default=150)
     ap.add_argument("--out", default=None)

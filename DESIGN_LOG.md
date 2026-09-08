@@ -1278,3 +1278,146 @@ proper repeated-trial statistics (N≥3 runs per game per config) before
 drawing more conclusions locally, or (b) judge future changes against the
 real Kaggle Phase B score (55 public games, one ground truth) instead of
 noisy local reruns. Nothing was submitted to Kaggle today.
+
+## 2026-09-08 — Two new agent architectures from current field leaders (REPL harness + executable world model)
+
+**Motivation:** rather than keep iterating the stalled CRL/goal-conditioned
+track (see 2026-09-07 CRL entries — synthetic sanity check passed, real-ARC
+transfer test unstable/inconclusive), asked what's actually winning on the
+real ARC-AGI-3 leaderboard right now and read the two strongest publicly
+documented approaches in full before writing any code (user: "essaye d'en
+savoir plus sur leur publication... avant de faire quoi que ce soit", then
+"travail sur les deux approche séparement et test les"):
+
+- **Duck Harness** (Tufa Labs, current #1 Kaggle leaderboard, 11.04):
+  github.com/Tufalabs/duck-harness, blog at tufalabs.ai/research/duck-harness/.
+  ONE tool (`python` REPL) exposing game state as inspectable variables
+  (`current_frame.ascii`/`.segmentation`, `history`, `valid_actions`,
+  `action(...)`), Qwen 3.6 27B FP8. Their own stated finding: hand-crafted
+  domain tools **hurt** vs. letting the model write its own inspection code.
+  Their `.segmentation` view (id/color/shape-hash/pixels/boundary/adjacency)
+  is functionally the same idea as our own `_find_unfiltered_blobs`/
+  `_bulk_colors` (llm_tools_agent.py) — independent convergent validation of
+  that earlier design. Their prompt also explicitly warns against mistaking
+  a HUD/timer edge-strip for clickable objects — the exact failure mode we
+  found and fixed ourselves in 2026-09-07's shared-palette work.
+- **Executable World Models** (Sergey Rodionov, arXiv:2605.05138, AGI-2026):
+  github.com/astroseger/arc-3-agents-baseline1. A coding agent (Codex CLI +
+  GPT-5.5 "high reasoning effort") maintains an executable Python world
+  model (engine/state-io/planner files), verifies it by exact-replaying
+  recorded observations, refactors toward simpler abstractions each cycle
+  (practical MDL-like bias), and plans by simulating through the model
+  before spending a real action. 58.12% mean RHAE, 15/25 public games fully
+  solved with GPT-5.5; only 41.29%/8-25 with the weaker GPT-5.4 — very
+  reasoning-quality-sensitive. Their README (checked 2026-09-08, postdates
+  the paper) already reports a follow-up hitting ~99% RHAE / full 25-game
+  saturation with GPT-5.6-sol, explicitly flagged by the authors themselves
+  as "saturation of the public set, not evidence ARC-AGI-3 is solved
+  generally" — i.e. even they don't trust public-set numbers at face value.
+
+New branch: `feature/repl-worldmodel-agents` (off `feature/brain-persistent-notes`,
+so the new agents can reuse the segmentation/blob utilities already built there).
+
+**Built, both integrated into `src/benchmark_agent.py` as `--agent repl` /
+`--agent worldmodel`:**
+
+- `src/llm_repl_agent.py` (`ReplToolsAgent`) — direct adaptation of Duck
+  Harness to our stack (local Ollama, not their inference server). One
+  fenced ```python``` code block per turn, exec'd in a reduced-builtins
+  sandbox exposing `current_frame`/`previous_frame`/`history`/
+  `valid_actions`/`action(...)`. Honest simplifications vs. the original,
+  documented in the module docstring: `action(...)` only QUEUES (our
+  Agent.main() contract is one real env step per choose_action() call, we
+  can't let the model step the real env mid-snippet like their harness
+  does), no Docker/subprocess sandbox isolation (just a restricted
+  `__builtins__`), no attached image by default. `.segmentation` reuses
+  `llm_tools_agent._find_unfiltered_blobs`/`_bulk_colors` directly rather
+  than reimplementing.
+- `src/llm_world_model_agent.py` (`WorldModelAgent`) — scaled-down
+  adaptation: ONE function `predict_next_ascii(ascii_grid, action) ->
+  ascii_grid` instead of three files, exact-string-match + character-level
+  soft-match verification against a capped transition log, 1-ply lookahead
+  planning (prefer the action predicted to change the state most, novelty
+  proxy) with round-robin fallback while the model is still identity-like,
+  budget-capped refinement calls (`MAX_REFINE_CALLS`) with a regression
+  guard (reject a refined version if it scores worse than the current one
+  on the same recorded transitions — same spirit as their replay verifier
+  gating acceptance).
+
+**Bugs caught during smoke-testing, fixed before the real test (both real,
+both would have silently broken results if left in):**
+1. `ReplToolsAgent` never fed the previous turn's exec error back to the
+   model — it repeated the identical `TypeError: 'int' object is not
+   subscriptable` (wrong assumption about the bbox format) across
+   consecutive calls with zero ability to self-correct. Fixed by appending
+   `self.last_error` + `self.last_code` to the next prompt when non-empty;
+   confirmed empirically afterward that the model DOES recover within 1-2
+   turns once it can see its own error.
+2. `WorldModelAgent._run_predict` had NO runtime guard on the LLM-generated
+   `predict_next_ascii` function — only compile-time syntax was checked. An
+   accidental infinite loop in generated code would silently freeze the
+   whole agent forever (this function runs once per legal action for
+   planning, plus once per logged transition for verification, so a hang
+   anywhere is a hang everywhere). Fixed with a `signal.alarm`-based 2s
+   timeout per call; verified with a deliberately-infinite `while True:
+   pass` stub that it now returns cleanly instead of hanging.
+
+**Results (local qwen3.8, which `ollama ps` reveals is actually a 27.3B
+model at Q4_K_M, fully resident in VRAM — same rough class as Tufa Labs'
+own Qwen 3.6 27B, just running through Ollama on this machine's single GPU
+instead of their production inference stack):**
+
+| Agent | Game | Actions | Levels | Won | Notes |
+|---|---|---|---|---|---|
+| UnifiedVisionAgent (baseline, 2026-09-07 run) | ls20 | 150 | 1/7 | No | reference point |
+| UnifiedVisionAgent (baseline, 2026-09-07 run) | cd82 | 150 | 0/6 | No | |
+| UnifiedVisionAgent (baseline, 2026-09-07 run) | tr87 | 150 | 0/6 | No | |
+| ReplToolsAgent | ls20 | 21 | 0/7 | No | smoke test only |
+| ReplToolsAgent | tr87 | 60 | 0/6 | No | no crash, ~4.3s/action |
+| ReplToolsAgent | cd82 | 60 | 0/6 | No | no crash, ~4.3s/action |
+| WorldModelAgent | ls20 | 60 | 0/7 | No | 0/4 refinement calls succeeded (see below) |
+
+Budgets are NOT matched to the baseline's 150 (60, sometimes less) —
+local-model latency made a fair like-for-like comparison impractical today;
+these numbers say "didn't crash, didn't yet win at a smaller budget," not
+"worse than baseline at equal budget."
+
+**REPL agent**: works end-to-end, self-corrects from sandbox exceptions
+after the error-feedback fix, roughly 4.3s/action (~260s for 60 actions on
+tr87/cd82). Still hits the bbox-format exec error close to half the time
+on a fresh code snippet — burns real turns on failed inspection rather than
+progress. No level completed at these small budgets; not evidence either
+way about the mechanism's ceiling, just an honest "ran clean, too small a
+budget/too few runs to see a signal" result, same caveat as every local
+sweep this project has run.
+
+**World model agent — the more decisive finding of the day**: EVERY
+refinement attempt (4/4 across a 60-action ls20 run, each given a generous
+240s timeout) timed out waiting for qwen3.8 to finish generating a
+refined `predict_next_ascii`. The agent therefore ran the ENTIRE test in
+its round-robin fallback, having never once obtained a working transition
+model. All the mechanism's individual pieces (compile-check,
+regression-guard accept/reject, replay verification, the new SIGALRM
+timeout guard) were unit-tested and confirmed correct in isolation — the
+bottleneck is pure LLM generation latency for a prompt containing two full
+64x64 grids (~4KB of text each) on local hardware, not a logic bug. This
+plausibly explains why the source paper needed Codex CLI + GPT-5.5/5.6
+cloud-scale infrastructure rather than a claim that the approach itself is
+unsound — worth retrying with a smaller/faster or code-specialized local
+model for the refinement step specifically (e.g. `qwen2.5-coder:7b`,
+already pulled locally) before concluding anything about the mechanism's
+real value here. Not attempted today.
+
+### Honest bottom line
+
+Two new, functionally-complete agent architectures added, both directly
+traceable to the two strongest publicly-documented ARC-AGI-3 approaches
+found today, both committed on `feature/repl-worldmodel-agents`. Neither
+beat the existing baseline today, but the comparison wasn't apples-to-apples
+(much smaller action budgets, single runs, no repeated trials — same
+"12 games × 1 run each is not enough data" caveat as 2026-09-07). The REPL
+agent is immediately usable and cheap to keep iterating on. The world-model
+agent's core loop is implemented and unit-verified but has not yet
+completed a single real refinement cycle locally — its next step is
+infrastructure (faster/smaller refinement model), not more agent logic,
+before it can be judged fairly. Nothing was submitted to Kaggle today.
