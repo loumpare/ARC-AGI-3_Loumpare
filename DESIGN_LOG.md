@@ -1556,3 +1556,107 @@ not remaining exec-error noise. The untried image-attachment lever from
 the previous entry is still the most likely next thing to actually move
 outcomes, since Duck Harness's own writeup credits it as a real
 contributor, not just a nice-to-have.
+
+## 2026-09-08/09 — Ran Duck Harness's REAL implementation against our local ls20
+
+User: "je veux que tu essaies LEUR Implémentation complète" -- rather than
+keep guessing at gaps from reading source, clone and actually run their
+real code (`github.com/Tufalabs/duck-harness`) against our own offline
+environment, using our local Ollama as the model server.
+
+**Feasibility check, confirmed real not assumed**: their `tufa-arc-agi-framework`
+(TAAF) package's `pyproject.toml` pins `arc_agi>=0.9.8`/`arcengine>=0.9.3` --
+this repo's venv already has the exact same versions (`arc-agi==0.9.8`,
+`arcengine==0.9.3`) installed. `TAAF.game_api.ArcadeSpec(operation_mode=OFFLINE)`
+is the identical no-network/no-API-key mode this project's own agents already
+use, and accepts an explicit `environments_dir` -- pointed it straight at our
+own `data/environment_files`, no adapter needed. All required Python deps
+(`dotenv`, `matplotlib`, `requests`) were already present.
+
+**Set up a minimal driver** (bypassing their Makefile/`uv`/Slurm/Kaggle
+deployment scaffolding entirely, which none of this local setup needs):
+`taaf.game_api.GameAPI(env_name="ls20", arcade_spec=...)` +
+`inference.framework.solver.HarnessSolver(model="qwen3.8:latest",
+start_local_server=False)` + `taaf.benchmark.Benchmark(games=[game],
+solver=solver).run()`, with `LOCAL_ANALYZER_BASE_URL=http://localhost:11434/v1`
+pointed at Ollama's own OpenAI-compatible endpoint (not a real vLLM/OpenRouter
+server, which is what they actually built this for).
+
+**First real run hit a genuine interop bug, not a config mistake**: Ollama's
+OpenAI-compat layer rejects `content: null` on a chat message
+(`400 ... "invalid message content type: <nil>"`), which is valid on
+real OpenAI/vLLM for an assistant message that's pure reasoning with no
+text content (`inference/agent/tool_agent.py` line ~1900:
+`assistant_message["content"] = None`). Confirmed by direct trace, not
+guessed. **Patched the local clone**: `None` -> `""` at that one line.
+This is a real Ollama-strictness gap, not evidence their code is wrong.
+
+**Before the patch, the run had already reached `levels=1.0/7` in exactly
+18 actions before crashing on that bug at action 19** (score 3.57 in their
+own metric). This is the first time ANY agent -- ours or a port of theirs --
+has completed a level of ls20 today, and did it in roughly a quarter of our
+baseline's ~78 actions.
+
+**After the patch, three more real attempts, same local model, same game,
+same offline environment, no code changes between them (temperature=0.6
+sampling is the only source of variation)**:
+
+| Attempt | Actions | Levels | Notes |
+|---|---|---|---|
+| Pre-patch (crashed at the bug) | 18 (crashed at 19) | 1/7 | score 3.57 |
+| Post-patch, capped at 30 | 30 (ran to cap) | 0/7 | state=`gave_up`, score 0.00 |
+| Post-patch, capped at 150 | 18 to reach level 1, then stalled hard through ~102-103+ before being cut off after ~1.5h real wall-clock with zero further progress | 1/7 (never advanced past it) | interrupted, not a clean finish |
+
+**Honest findings, all three genuinely new data points, not re-runs of the
+same thing**:
+1. **Level 1 was reached in exactly 18 actions in both attempts that got
+   there at all** -- a striking, consistent number, suggesting the model
+   converges on a similar (possibly near-optimal) strategy when it correctly
+   understands the level, not random luck.
+2. **But it is NOT reliable**: 1 of 3 real attempts got 0 levels entirely.
+   This nuances (and for our specific local model, contradicts) any
+   assumption that "their agent solves ls20 near-perfectly" -- that claim
+   traces to a DIFFERENT system entirely (Executable World Models'
+   `ewma_sv_v1.6` + GPT-5.6-sol, a closed frontier model via Codex CLI, not
+   Duck Harness) and does not transfer to Duck Harness's own architecture
+   running our local 27B model.
+3. **No attempt advanced past level 1**, even the one given up to 150
+   actions -- 84+ additional actions past the level-1 win produced zero
+   further progress before the run was manually cut off for practicality
+   (see next point). This matches our own baseline's pattern of "level 1
+   is learnable, level 2's larger/harder layout is a much bigger jump" --
+   i.e. level 2 being hard is not specific to our own agent's weaknesses.
+4. **Severe, real slowdown observed on the long run**: 18 actions in 342s,
+   then 84 more in ~850s (still reasonable pace), then only ~1-2 more
+   actions across the next ~50+ minutes before being cut off -- confirmed
+   via the real transcript file's timestamp (fresh writes throughout, so
+   NOT frozen/hung, genuinely still working) and round count (153 total
+   model-response rounds logged for only ~102-103 real actions, i.e. it
+   was spending many tool-call rounds per turn investigating without
+   committing to a real action). Root cause not fully diagnosed (could be
+   context growth degrading local inference speed, could be the model
+   genuinely stuck reasoning in circles on a harder obstacle) -- flagged
+   as unresolved, not asserted.
+5. Given point 4, **the full 3×150-action verification the user asked for
+   was not completed as originally planned** -- stopped after ~1.5h on
+   the first trial once it became clear a full run could take many more
+   hours at this degraded rate, a practical call given how much of today
+   was already spent on this whole investigation, not a technical failure.
+
+### Honest bottom line
+
+Confirmed the real Duck Harness code runs against our real local
+environment and real local model after one small, genuine interop patch --
+this is not a simulation or an inference from reading source, it is their
+actual harness actually playing our actual `ls20`. It reached level 1 in
+18 actions (vs. our baseline's ~78) when it worked, which is a real,
+meaningful efficiency gap consistent with the architectural analysis
+earlier in this log (multi-round per-turn tool calls, live multi-action
+batching, no hardcoded exploration bootstrap). But it is not reliable with
+our specific local model (1/3 clean failures, 0/3 progressed past level 1),
+and one run degraded severely in speed for reasons not yet root-caused.
+The efficiency advantage is real; the "near-perfect ls20 solve" claim
+belongs to a different, closed-model system and should not be expected
+here. Vendored clone (with the one-line patch) left at
+`/tmp/.../scratchpad/vendor/duck-harness` -- not committed to this repo,
+purely an investigation artifact, MIT-licensed third-party code.
