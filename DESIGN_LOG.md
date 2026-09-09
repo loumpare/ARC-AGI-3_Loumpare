@@ -2012,3 +2012,105 @@ serve a 27B FP8 model with real serving optimizations was. `cd82`/`tr87`
 resisting even the real setup, and `ls20` failing here despite past local
 success, are the two most important nuances not to lose in that headline
 finding.
+
+## 2026-09-09 (later still) — Critical-factor ablation: isolating what actually matters
+
+User: "prépare un Long benchmark sur un nombre de jeux témoin (pas beaucoup)"
+to isolate which specific factor (model precision, weight count, sandbox
+tools) is actually responsible for the Kaggle-vs-local gap, rather than
+resting on the combined "hardware+model" finding above. 4 witness games:
+`ls20`, `cd82`, `tr87` (heavily tested all day) + `re86` (a positive
+control that worked well on the real Kaggle run). Designed as staged
+one-factor-at-a-time isolation, not full factorial, given real time/quota
+cost. User: run everything, in whatever order is smartest; also: run the
+Kaggle-dependent stages in parallel with the local one to save time.
+
+### Stage 3 (tools/sandbox), COMPLETE -- local, no Kaggle quota spent
+
+Same weak local model (Ollama qwen3.8, Q4_K_M) and same ~60-action/no-multimodal
+budget throughout, only the AGENT/TOOLS differ:
+
+| Condition | ls20 | cd82 | tr87 | re86 |
+|---|---|---|---|---|
+| A: our own baseline (`UnifiedVisionAgent`, hardcoded tools) | 0/7 | 0/6 | 0/6 | 0/8 |
+| B: our simplified REPL port (`llm_repl_agent.py`) | 0/7 | 0/6 | 0/6 | 0/8 |
+| C: the REAL unmodified Duck Harness code | **1/7** | 0/6 | 0/6 | 0/8 |
+
+**Clean, isolated result: only condition C won anything, on the exact same
+weak model everything else used.** This directly confirms the
+tools/sandbox architecture itself has real, independent value -- it is
+not purely a "better model" story. Condition B (our own REPL port) was
+also markedly slower than both A and C (874-1225s/game vs. A's 71-249s and
+C's 461-958s) and hit far more sandbox exec errors, consistent with
+[[repl_worldmodel_agents_2026-09-08]]'s known gaps versus the real
+implementation (single/dual tool-call-per-turn cap, in-process exec,
+regex-parsed code blocks vs. their subprocess sandbox, native tool-calling,
+much larger per-turn tool-call budget). `cd82`/`tr87`/`re86` staying at 0
+across all three conditions again confirms these resist the general
+approach regardless of tooling sophistication, consistent with every
+other finding today.
+
+### Stage 1 (model size) and Stage 4 (serving infra), Kaggle -- real engineering
+detour, most of it now resolved
+
+Read the actual (public) `setup_commands.json` from the `jeroencottaar/
+taaf-kaggle-source-share` dataset to get the REAL, exact vLLM invocation
+their production pipeline uses (not guessed) -- confirms
+`LOCAL_ANALYZER_TOOL_STEPS=0` really does mean unlimited tool calls per
+turn (not literally zero, as hypothesized on 2026-09-08), the exact flag
+set (`--tool-call-parser qwen3_coder --reasoning-parser qwen3
+--enable-prefix-caching --default-chat-template-kwargs
+'{"preserve_thinking": true}'`), and that `arc-agi` installs from the
+competition's offline wheelhouse.
+
+Built a combined custom kernel (not their notebook -- needed full control
+over which model/precision to load) reusing their proven vLLM wheelhouse
+dataset. Two real, safety-classifier-correct stops during setup: an
+agent-selected unverified HF account for a GGUF download (redirected to
+`unsloth`, an established publisher, per the same rule as the earlier
+vLLM section), and creating a brand-new Kaggle dataset from this project's
+own `data/environment_files/` without prior explicit authorization for
+that exact destination -- paused, explained, got explicit "la meilleure
+selon toi" go-ahead before proceeding (private dataset,
+`loumitrmas/arc-agi-3-offline-environment-files`, 267KB zipped, public
+competition game definitions only, nothing sensitive).
+
+**Two real, fully-diagnosed infrastructure problems found and fixed:**
+1. `competition_sources` in `kernel-metadata.json` made every push fail
+   with an opaque `400 Client Error` and zero detail (unlike the earlier
+   `taaf-duck-harness-kaggle-share` push, which used the identical field
+   successfully) -- root cause not identified, but isolated by bisection
+   (removing it fixed the push) and worked around by uploading the small
+   (4.2MB local, 267KB zipped) `environment_files` as our own dataset
+   instead of depending on the competition attachment.
+2. **`/kaggle/working` has a fixed 21GB quota, confirmed via
+   `shutil.disk_usage`** -- the first combined D1+D4a+D4b run cascaded:
+   vLLM's own site-packages install alone consumes ~10GB, the 8B model
+   download used another ~8GB, leaving only ~10GB free by the time D4a
+   tried to download a 16.8GB GGUF (`Not enough free disk space` ->
+   corrupted partial download -> `File reconstruction error` -> D4b
+   cascaded failure from the missing GGUF path -> final "No space left on
+   device" during the teardown notebook-conversion step). Added explicit
+   `shutil.disk_usage` logging and `shutil.rmtree` cleanup between stages
+   -- confirmed the numbers precisely (10.2GB free after D1+cleanup, need
+   16.8GB for the GGUF) rather than guessing a fix. **Given vLLM's ~10GB
+   footprint plus a 16.8GB Q4_K_M GGUF structurally cannot both fit in
+   21GB, Stage 4 (serving infra) was DROPPED from this run rather than
+   forced through with a much-lower-quality ~9GB quant that would
+   confound precision with serving infra** -- left as a deliberately
+   separate, not-yet-attempted follow-up if this axis is still wanted.
+
+**D1 (model size, 8B FP8 vs. the 27B FP8 anchor) also hit a real, distinct
+bug on the first two attempts**: vLLM's OpenAI server never became ready
+within 900s despite the model being much smaller than the 27B one that
+loaded fine the day before. Root cause not fully isolated before the
+day's session ended, but the fix applied (before final results were in)
+was reverting to the EXACT flag set from the real production
+`setup_commands.json` (`--tool-call-parser qwen3_coder
+--reasoning-parser qwen3 --generation-config vllm
+--default-chat-template-kwargs '{"preserve_thinking": true}'`, rather
+than the simplified `--tool-call-parser hermes` this script had guessed)
+-- plausible that the parser mismatch was silently stalling server
+startup. **Check this memory/DESIGN_LOG's next entry or the actual kernel
+result for whether this fix worked before trusting the model-size
+ablation's outcome; not confirmed as of this entry.**
