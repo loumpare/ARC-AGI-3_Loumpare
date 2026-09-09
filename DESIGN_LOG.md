@@ -2114,3 +2114,63 @@ than the simplified `--tool-call-parser hermes` this script had guessed)
 startup. **Check this memory/DESIGN_LOG's next entry or the actual kernel
 result for whether this fix worked before trusting the model-size
 ablation's outcome; not confirmed as of this entry.**
+
+### Stage 1 follow-up: the real cause was never the flags -- wrong GPU allocated
+
+The flag fix (v4 push) revealed the ACTUAL error immediately instead of a
+bare timeout: `pydantic_core._pydantic_core.ValidationError: ... The
+quantization method fp8 is not supported for the current GPU. Minimum
+capability: 75. Current capability: 60.` -- and `nvidia-smi` in the same
+log confirmed the allocated GPU was a **Tesla P100-PCIE-16GB (Pascal,
+compute capability 6.0)**, not the requested `NvidiaRtxPro6000`. The
+`machine_shape` field in `kernel-metadata.json` was silently NOT honored
+for this kernel, even though it was set identically to the one working
+kernel from earlier today.
+
+Added `_assert_rtx_pro_6000()` -- a fast nvidia-smi check at the very
+start of the script, aborting in seconds instead of burning ~20 minutes
+on a doomed-from-the-start install+load. Hypothesized `kernel_type:
+"script"` might not honor `machine_shape` the way `"notebook"` does (the
+one working RTX Pro 6000 kernel was a notebook) -- converted this script
+into a minimal single-cell notebook and re-pushed (v5). **The fast-fail
+check worked exactly as designed (15s, not 20 minutes) but still reported
+a Tesla P100** -- ruling out kernel_type as the actual variable.
+
+**New, more likely hypothesis, not yet tested**: the one kernel that DID
+get the real RTX Pro 6000 (`loumitrmas/duck-harness-real-setup-offline-test`,
+2026-09-09 earlier) had `competition_sources: ["arc-prize-2026-arc-agi-3"]`
+attached; this ablation kernel does not (removed earlier after it caused
+an opaque `400 Client Error` on push, worked around with a private
+`environment_files` dataset instead -- see above). The RTX Pro 6000 may be
+a genuine per-competition compute grant that Kaggle only allocates to
+kernels actually attached to that competition, not a general account-wide
+perk -- a kernel without `competition_sources` may simply fall back to
+the platform's standard free-tier GPU (P100) regardless of `machine_shape`.
+**Not confirmed** -- the `400 Client Error` on `competition_sources` still
+has no known root cause; whether it's the same underlying issue or a
+separate, unrelated bug is unknown. Test this hypothesis specifically
+(get `competition_sources` working, even if it means a different dataset
+combination) before spending more quota on Stage 1/4.
+
+### Honest bottom line for the ablation benchmark, end of day
+
+**Stage 3 (tools/sandbox) is a clean, complete, valuable result**: holding
+the model fixed (weak local Ollama qwen3.8), only the real unmodified Duck
+Harness code won anything (`ls20` 1/7) -- neither our own baseline nor a
+simplified REPL port did. This is real, independent evidence that the
+tools/sandbox architecture itself matters, not just model quality.
+
+**Stage 1 (model size) is unresolved, not negative** -- five Kaggle kernel
+pushes today hit five distinct, each individually real and diagnosed
+infrastructure problems (an unexplained `competition_sources` 400 error,
+a `/kaggle/working` 21GB disk quota too small for vLLM+a 16.8GB GGUF
+together, silently-wrong vLLM flags causing an opaque timeout instead of
+the real FP8-unsupported error, and finally a GPU allocation that didn't
+honor `machine_shape` at all) without ever getting the 8B model to
+actually run a single game. **This is not evidence the model-size
+hypothesis is wrong -- it is evidence this specific Kaggle automation
+path needs more infrastructure work before it can produce a trustworthy
+result.** Stopped here for today per the user's own call, given the
+mounting infra friction; Stage 3's result stands on its own as today's
+solid ablation deliverable. Stage 4 (serving infra) was deliberately
+dropped earlier given the disk-quota finding, not attempted at all today.
