@@ -1903,3 +1903,112 @@ stack, evidenced concretely rather than assumed, and (b) the small-sample
 noise this project has flagged repeatedly all week, not any single fixable
 bug in this port. `run_duck_harness_final.py` (Ollama + multimodal) is the
 now-current best local driver for this line of testing if it continues.
+
+## 2026-09-09 (later) — Their REAL setup, on Kaggle's actual RTX Pro 6000 grant
+
+User: "passe sur la version en ligne on va faire leur setup complet mais
+sur les gpu de kaggle" -- rather than keep working around this machine's
+hardware ceiling, run Duck Harness's actual public Kaggle notebook, with
+their actual FP8 weights and actual vLLM H100-class wheelhouse, on
+whatever GPU Kaggle grants for this competition.
+
+**Found their real accelerator via a community reproduction kernel's
+metadata** (not guessed): `kaggle kernels pull
+kevin250304/arc3-duck-v7-reproducible-baseline -m` showed
+`"machine_shape": "NvidiaRtxPro6000"` -- an NVIDIA RTX PRO 6000 (Blackwell,
+96GB VRAM, native FP8/FP4 tensor cores), confirming the user's own
+"rtx6000" recollection and explaining why their FP8 setup works at all:
+this Kaggle-granted accelerator has none of this local machine's blockers
+(fits 27B at FP8 trivially in 96GB; Blackwell has real FP8 hardware
+support unlike this machine's Ampere 3090). Multiple different kernel
+authors use the same setup, indicating a real compute grant tied to this
+competition, not one author's special access.
+
+**All three of their referenced datasets are public**, confirmed via
+`kaggle datasets list -s ...`: `jeroencottaar/taaf-kaggle-source-share`
+(code bundle), `driessmit1/arc3-vllm-h100-wheelhouse-v3` (5.16GB, prebuilt
+vLLM wheels), `driessmit1/vrfai-qwen3-6-27b-fp8-hf-snapshot` (29GB, the
+actual FP8 weights). Read their real `taaf-duck-harness-kaggle-share.ipynb`
+cell-by-cell -- it installs the ARC runtime from the competition
+wheelhouse, mounts the bundled source dataset by marker file (not a fixed
+path, learned from this project's own earlier mount-path instability
+findings), and in non-submission mode plays the **bundled offline
+environment files** (no gateway needed) -- exactly the reproducible,
+zero-submission-cost mode needed here.
+
+**Pushed our own kernel** (`loumitrmas/duck-harness-real-setup-offline-test`)
+via `kaggle kernels push` with the same three dataset sources + the
+competition data source + `"machine_shape": "NvidiaRtxPro6000"`, using
+their notebook unmodified. Confirmed the CLI's own `--accelerator`/
+`machine_shape` mechanism works as expected: the pushed kernel came up
+with `Accelerator: GPU RTX Pro 6000` in the web UI.
+
+**No new safety-classifier stops this time**, worth noting for contrast
+with the local vLLM section above (which hit two legitimate ones) -- this
+Kaggle path only used public, already-verified-via-`kaggle datasets list`
+datasets and the unmodified public notebook, so there was no
+agent-selected untrusted source or unauthorized flag to trigger one.
+
+**Operational note for next time**: `kaggle kernels logs`/`kaggle kernels
+output` via the CLI (v2.2.4) returned nothing for this in-progress
+notebook-type kernel throughout its ~2h12m run, despite the Kaggle web UI
+showing live log lines the whole time -- relied on the user's own
+browser screenshots for live monitoring. Only after the kernel reached
+`KernelWorkerStatus.COMPLETE` did `kaggle kernels logs` return the full
+transcript. Don't assume the CLI log/output commands are useless for a
+kernel type generally -- they appear to only work post-completion for
+notebook kernels specifically, not scripts (unconfirmed for scripts).
+
+**Real result, 25 public games, single pass, 2h12m38s actual wall-clock
+(concurrent), mean score 1.69, median 0.25:**
+
+| Game | Score | Levels | Actions | Game | Score | Levels | Actions |
+|---|---|---|---|---|---|---|---|
+| ar25 | 10.10 | 3/8 | 273 | m0r0 | 0.00 | 0/6 | 304 |
+| bp35 | 0.25 | 1/9 | 520 | r11l | 4.76 | 1/6 | 81 |
+| cd82 | 0.00 | 0/6 | 93 | re86 | 7.21 | 2/8 | 147 |
+| cn04 | 0.00 | 0/6 | 121 | s5i5 | 0.00 | 0/8 | 51 |
+| dc22 | 0.00 | 0/6 | 195 | sb26 | 2.78 | 1/8 | 64 |
+| ft09 | 0.00 | 0/6 | 72 | sc25 | 0.00 | 0/6 | 237 |
+| g50t | 0.00 | 0/7 | 128 | sk48 | 0.00 | 0/8 | 694 |
+| ka59 | 0.30 | 1/7 | 125 | sp80 | 2.58 | 1/6 | 178 |
+| lf52 | 0.31 | 1/10 | 94 | su15 | 2.22 | 1/9 | 118 |
+| lp85 | 2.78 | 1/8 | 18 | tn36 | 2.99 | 1/7 | 73 |
+| ls20 | 0.00 | 0/7 | 276 | tr87 | 0.00 | 0/6 | 169 |
+| | | | | tu93 | 3.34 | 2/9 | 58 |
+| | | | | vc33 | 2.56 | 2/7 | 121 |
+| | | | | wa30 | 0.00 | 0/9 | 234 |
+
+**13/25 games (52%) got at least one level completed** -- a completely
+different picture from every local attempt today, where only `ls20` ever
+worked, and unreliably (1/3 to 2/3 depending on the run). Mean score 1.69
+also lands close to Duck Harness's own self-reported "mean score
+1.6002" from their blog writeup (2026-09-08 entry) -- this real run is
+consistent with their own published number, unlike anything achieved
+locally.
+
+**Genuinely surprising, worth stating plainly rather than smoothing
+over**: `ls20` -- the one game this whole investigation has repeatedly
+succeeded on locally, including with a badly under-resourced setup --
+scored **0/7 here**, despite spending 276 actions on it (far more than
+the ~18-20 that sufficed locally). `cd82` and `tr87` also stayed at 0,
+consistent with every local finding today that these two specifically
+resist this general approach regardless of resources. Real variance is
+real: more compute and the correct model do not guarantee success on the
+specific game a smaller setup happened to solve, and don't fix every
+game either.
+
+### Honest bottom line
+
+This directly and conclusively answers the day's central question
+("pourquoi cela ne fonctionne pas aussi bien que leur claim"): **it was
+the local model/hardware gap, not the architecture.** Given the actual
+model and actual appropriate hardware Duck Harness was built for, it
+reaches a mean score matching their own published number and succeeds
+broadly across more than half the public game set -- something no local
+configuration tried today came close to. The REPL/multi-round-tool-call
+architecture itself was never the bottleneck; this machine's inability to
+serve a 27B FP8 model with real serving optimizations was. `cd82`/`tr87`
+resisting even the real setup, and `ls20` failing here despite past local
+success, are the two most important nuances not to lose in that headline
+finding.
