@@ -1750,3 +1750,156 @@ natural stopping point for now: further work here needs either a cleaner
 controlled experiment design (isolating cold-start vs. intrinsic
 difficulty) or a decision to move on to a different track, not more ad hoc
 single runs.
+
+## 2026-09-09 — Root-causing the gap to their claims, the vLLM saga, and a measured multimodal test
+
+User asked directly: "pourquoi cela ne fonctionne pas aussi bien que leur claim et
+résultats?" -- a systematic accounting of every real, evidenced gap between
+this local setup and Duck Harness's actual deployed config, then "corrige
+tout les points le mieux possible."
+
+**Gaps identified, each backed by something actually read/checked, not guessed:**
+1. **Multimodal was never enabled** -- their `configs/inference.json` ships
+   `multimodal.context=current_grid` by default; every prior test today ran
+   text-only because `MULTIMODAL_CONTEXT` was simply never set in the driver
+   script. A real oversight, not a hardware limit.
+2. **Model precision**: their config serves `vrfai/Qwen3.6-27B-FP8`; local
+   Ollama runs Q4_K_M -- meaningfully more lossy quantization.
+3. **Serving infra**: their config has `enable_prefix_caching: true` on
+   vLLM; Ollama has no equivalent for this workload, plausibly explaining
+   the repeated severe mid-run slowdowns seen all day (context reprocessed
+   from scratch every call as it grows).
+4. **Statistical methodology**: their reported numbers (mean score 1.6002,
+   Symbolica's 36%, etc.) are averages over `n_passes=20`; today's tests
+   were 1-3 single runs -- much noisier.
+5. **Time budget**: their config allows `max_runtime_minutes=45`/game;
+   today's tests used 600s (10 min) caps for practicality.
+
+User chose the most ambitious fix for every point: multimodal always on,
+try a less-quantized model despite VRAM risk, attempt a real local vLLM
+install despite effort/risk, and match their real n_passes/runtime config
+as closely as practical.
+
+### The vLLM attempt: three distinct, fully-diagnosed failures, correctly abandoned
+
+Confirmed early via `nvidia-smi` that their exact model
+(`vrfai/Qwen3.6-27B-FP8`) cannot run on this machine's RTX 3090 (Ampere,
+compute capability 8.6) regardless of installation effort: FP8 tensor-core
+acceleration requires Ada Lovelace/Hopper (8.9+/9.0), and 27B params at
+1 byte/param (~27GB) exceeds the card's 24GB VRAM outright -- verified via
+the model's real HuggingFace metadata (`w8a8`/`float-quantized` format,
+confirmed size), not assumed. Pivoted to a 4-bit alternative.
+
+**Safety note**: two actions were correctly blocked by the auto-mode
+classifier during this work and required explicit user sign-off before
+proceeding -- downloading model weights from an agent-selected unverified
+HuggingFace account (first pick was `Lorbus`, an unverified account; user
+redirected to the well-established `unsloth` instead), and launching vLLM
+with `--trust-remote-code` (turned out unnecessary once checked --
+`Qwen3_5ForConditionalGeneration` is natively registered in vLLM, no
+`auto_map`/custom `.py` in the repo). Both were legitimate stops, not
+false positives.
+
+Set up an isolated venv (`.venv-vllm-DONOTCOMMIT/`, gitignored, never
+touching the project's main `.venv`) specifically so a risky install
+couldn't damage the working submission pipeline.
+
+**Failure 1 -- `unsloth/Qwen3.6-27B-NVFP4` (22GB, mixed NVFP4/FP8/BF16
+compressed-tensors format)**: `nvrtc: error: failed to open
+libnvrtc-builtins.so.13.0` on first load attempt. Root-caused precisely
+(not guessed): the library file existed inside the venv's own
+`nvidia-cuda-nvrtc` pip package, just not on `LD_LIBRARY_PATH` --
+fixed by exporting it explicitly. Real, second failure after that fix:
+`CUDACachingAllocator... memory allocation failed with OOM`, reproduced
+identically across two configurations (default settings, then
+`--enforce-eager` + reduced `--max-model-len 8192` + higher
+`--gpu-memory-utilization 0.96`) -- the model's mixed-precision weight
+REPACKING step needs scratch memory beyond its own 22GB resident
+footprint, and that doesn't fit in the ~25.3GB actually available. Not a
+tuning problem; a real ceiling for this specific model on this specific
+card, confirmed by two independent configurations failing at the same
+point.
+
+**Failure 2 -- `unsloth/Qwen3.6-27B-GGUF` Q4_K_M (16.8GB)**: different
+failure mode entirely -- Linux OOM-killer terminated the process at
+~27.5GB **system RAM** (not VRAM), confirmed via `journalctl`
+(`Out of memory: Killed process ... anon-rss:27495484kB`). vLLM's GGUF
+loading path apparently materializes substantially more than the file
+size in host RAM before transferring to GPU, and this machine has only
+31GB total system RAM.
+
+**Failure 3 -- `unsloth/Qwen3.6-27B-GGUF` Q3_K_S (12.4GB, smaller to fit
+under the RAM ceiling)**: yet another distinct failure -- vLLM 0.29.0
+itself errored trying to parse the raw `.gguf` binary file as a JSON
+config (`OSError: It looks like the config file at '....gguf' is not a
+valid JSON file`), inside an internal `maybe_override_with_speculators`
+pre-check. A real vLLM version bug/edge-case with this GGUF+separate-tokenizer
+combination, not a resource limit.
+
+**Three genuinely different, independently-confirmed blockers in a row**
+(missing library -> fixed; VRAM ceiling on one format; system RAM ceiling
+on another format; then a code bug on a third) is a strong, honest signal
+that this specific machine (24GB Ampere GPU, 31GB system RAM) is not
+well-suited to locally serving a 27B model via vLLM at any precision level
+tried, independent of tuning effort. Abandoned after the user's own agreed
+bounded "one last attempt" criterion was met. Cleaned up: killed all vLLM
+processes, deleted both downloaded model directories (51GB combined -- disk
+had filled to 100%/8.1GB free at one point), left the vLLM venv itself
+installed (small, harmless) in case of a future attempt on different
+hardware.
+
+### Multimodal, actually measured this time (not just enabled and assumed to help)
+
+Fixed `run_duck_harness_final.py` to point back at Ollama (the only
+working backend) with `MULTIMODAL_CONTEXT=current_grid` set. First
+verified via direct transcript inspection that the image is genuinely
+reaching the model, not silently ignored: the model's own reasoning text
+explicitly references visual details ("bottom-left has a blue square with
+an 'L' shape", "Let me look at the image again... the orange/blue square
+appears to be in the same position") -- real evidence of vision use, not
+inferred from config alone.
+
+**3-pass battery on `ls20` (150-action/20-min caps), multimodal ON:**
+
+| Pass | Actions | Levels | Score | Notes |
+|---|---|---|---|---|
+| 1 | 21 (crashed) | 1/7 | 3.57 | level 1 took 20 actions; hit a real Ollama read-timeout entering level 2 |
+| 2 | 31 (crashed) | 1/7 | 2.06 | level 1 took 29 actions (worse than the 22-action human baseline); another read-timeout |
+| 3 | 14 (ran out of budget) | 0/7 | 0.00 | didn't even finish level 1 in 20 min |
+
+Mean levels 0.667, mean score 1.876.
+
+**Honest comparison to yesterday's non-multimodal 3-trial result**: 2/3
+level-1 completions both took EXACTLY 18 actions (better than the 22-action
+human baseline, consistent and efficient); 1/3 total failure. **With
+multimodal on, the two successful completions took 20 and 29 actions --
+both less efficient than the non-multimodal runs, one of them (29) actually
+WORSE than the human baseline itself** -- and both multimodal runs that
+progressed further hit real connection timeouts, consistent with the
+already-diagnosed context-growth slowdown pattern seen all day, plausibly
+made WORSE by multimodal (an image adds real payload/token weight to every
+single turn, growing the context faster). **This directly contradicts this
+morning's working hypothesis that missing multimodal was a likely
+significant contributor to underperformance** -- enabling it did not show a
+clear benefit in this small sample, and plausibly has a real cost via
+faster context growth. N=3 per condition is still very noisy; this is not
+proof multimodal hurts, only that it did not clearly help here, which is
+itself a useful, honest correction to this morning's assumption.
+
+### Honest bottom line
+
+Every one of the five gaps raised this morning was investigated concretely
+rather than left as speculation: multimodal is now fixed and confirmed
+genuinely working (verified via the model's own visual references) but
+did not show a measured benefit; the precision/serving-infrastructure gap
+(vLLM) was pursued in good faith through three distinct real failures
+before concluding this hardware isn't currently suited to it; the
+statistical-methodology and time-budget gaps remain real and unaddressed
+(today's tests are still far short of their 20-pass/45-min real config).
+On the specific question "why doesn't it work as well as their claims" --
+the most defensible answer after today's work is a combination of (a)
+genuinely less capable local serving/precision than their production
+stack, evidenced concretely rather than assumed, and (b) the small-sample
+noise this project has flagged repeatedly all week, not any single fixable
+bug in this port. `run_duck_harness_final.py` (Ollama + multimodal) is the
+now-current best local driver for this line of testing if it continues.
