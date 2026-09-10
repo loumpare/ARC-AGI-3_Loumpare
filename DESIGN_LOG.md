@@ -2174,3 +2174,71 @@ result.** Stopped here for today per the user's own call, given the
 mounting infra friction; Stage 3's result stands on its own as today's
 solid ablation deliverable. Stage 4 (serving infra) was deliberately
 dropped earlier given the disk-quota finding, not attempted at all today.
+
+## 2026-09-10 — Stage 1, four more real fixes, and a final clean-but-empty result
+
+User: "trouve des solutions pour kaggle c'est le plus important" -- kept
+pushing on Stage 1 rather than accepting yesterday's stop. Root-caused and
+fixed the `competition_sources` 400 error via bisection (not guessed):
+
+**Found the real constraint: `competition_sources` requires
+`enable_internet: false`.** Tested by pushing an otherwise-identical
+kernel with `enable_internet: false` -- succeeded immediately. Kaggle
+rejects internet-enabled kernels attached to a competition, which tracks
+with this competition's "no internet during evaluation" rule bleeding
+into kernel validation generally. This explains the entire earlier
+mystery: every prior push had `enable_internet: true` (needed for the
+HuggingFace model download) alongside `competition_sources`.
+
+**Fix, following the same pattern already used for `environment_files`**:
+pre-download `Qwen/Qwen3-8B-FP8` locally (8.9GB) and re-upload it as a new
+private Kaggle dataset (`loumitrmas/qwen3-8b-fp8-snapshot`) instead of
+pulling it at kernel runtime -- removes the need for `enable_internet` at
+all. With `competition_sources` + `enable_internet: false` + the
+pre-staged model dataset, pushed a fresh kernel id
+(`loumitrmas/ablation-model-size-v3`).
+
+**Two more distinct, real bugs found and fixed in sequence, each via an
+actual error message, not guessed:**
+1. First run got past the GPU check (implying it DID get the real RTX Pro
+   6000 this time -- FP8 loaded and the vLLM server came up cleanly,
+   which a P100 would have rejected outright) but then failed every game
+   identically with `RuntimeError('asyncio.run() cannot be called from a
+   running event loop')`. Root cause: Jupyter/papermill notebook execution
+   already runs its own asyncio event loop, so a plain top-level
+   `asyncio.run(bench.run())` -- which works fine as a plain script --
+   fails when executed as a notebook cell. Fixed with a small stdlib-only
+   helper (`_run_coro_isolated`) that runs the coroutine via `asyncio.run`
+   inside a fresh thread, avoiding any dependency on `nest_asyncio` (this
+   kernel has no internet, so an unavailable pip package would be a dead
+   end) -- verified locally first with a synthetic nested-event-loop test
+   before spending more Kaggle quota on it.
+2. Second run got past both the GPU check AND the asyncio fix (confirmed
+   via real HTTP traffic to the analyzer in the logs) but then every
+   single analyzer call failed with `400 ... "/kaggle/input/
+   qwen3-8b-fp8-snapshot is not a multimodal model"`. Root cause: this is
+   a genuine experimental-design gap, not an infra bug --
+   `MULTIMODAL_CONTEXT=current_grid` is set (matching the real production
+   config used for the 27B FP8 anchor run), but plain `Qwen/Qwen3-8B-FP8`
+   is text-only (unlike the `Qwen3.6-27B` family, which is natively
+   `image-text-to-text`). Every analyzer call was rejected outright,
+   burning the full 15-minute-per-game timeout on 4/4 games with **zero
+   actions taken on any of them** -- a clean, total washout, not a
+   negative performance signal.
+
+**Final honest status for Stage 1 (model size)**: seven distinct real
+problems diagnosed and mostly fixed across this two-day pursuit
+(`competition_sources`+internet conflict, disk quota, wrong vLLM flags,
+GPU allocation not honoring `machine_shape` twice, the notebook asyncio
+conflict, and finally this multimodal/text-only model mismatch) -- six of
+seven are now genuinely resolved and reusable for a future attempt, but
+the actual model-size question remains **unanswered**: 0 actions on all 4
+witness games is not evidence about 8B vs. 27B capability, only evidence
+that a text-only model can't be tested through a harness hardcoded to
+attach images. **A real retry needs a genuinely multimodal small model**
+(e.g. `Qwen3-VL-8B`, seen earlier today's HF searches) pre-staged the
+same way. Stopping here for real this time -- the infrastructure path is
+now well-understood and mostly reusable (GPU check, thread-isolated
+asyncio runner, competition_sources+no-internet+pre-staged-dataset
+pattern), so a future attempt should be much faster, but today's actual
+Stage 1 data point is still zero.
