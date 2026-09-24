@@ -1,0 +1,53 @@
+{
+  "game_id": "cd82-fb555c5d",
+  "agent_name": "duck-harness",
+  "status": "gave_up",
+  "pass_index": 0,
+  "pass_label": "0",
+  "eventCount": 136,
+  "lastEvent": {
+    "score": 2,
+    "state": "NOT_FINISHED",
+    "level": 3,
+    "run_status": "playing",
+    "type": "action",
+    "title": "Action 74",
+    "action_num": 74,
+    "analysis_step": 36,
+    "action_name": "ACTION5",
+    "action_display": "SPACE",
+    "reward": 0.16666666666666666,
+    "board_changed": true,
+    "done": false,
+    "level_completed": true,
+    "game_over": false,
+    "run_complete": false,
+    "batch_index": 1,
+    "batch_size": 1,
+    "animation": {
+      "frames": 16,
+      "unique_frames": 16,
+      "board_unchanged": false,
+      "transient_pixels": 717,
+      "transient_bbox": [
+        2,
+        3,
+        63,
+        63
+      ]
+    }
+  },
+  "viewer_steps": [],
+  "replay_url": "solver_analysis/cd82-fb555c5d_p0.html",
+  "levels_completed": 2,
+  "total_levels": 6,
+  "actions_per_level": [
+    56,
+    18,
+    0,
+    0,
+    0,
+    0
+  ],
+  "final_score": 6.474601524913316
+}

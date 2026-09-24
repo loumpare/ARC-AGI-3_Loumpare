@@ -1,0 +1,55 @@
+{
+  "game_id": "ar25-0c556536",
+  "agent_name": "duck-harness",
+  "status": "gave_up",
+  "pass_index": 0,
+  "pass_label": "0",
+  "eventCount": 112,
+  "lastEvent": {
+    "score": 2,
+    "state": "NOT_FINISHED",
+    "level": 3,
+    "run_status": "playing",
+    "type": "action",
+    "title": "Action 73",
+    "action_num": 73,
+    "analysis_step": 14,
+    "action_name": "ACTION3",
+    "action_display": "LEFT",
+    "reward": 0.125,
+    "board_changed": true,
+    "done": false,
+    "level_completed": true,
+    "game_over": false,
+    "run_complete": false,
+    "batch_index": 1,
+    "batch_size": 1,
+    "animation": {
+      "frames": 3,
+      "unique_frames": 2,
+      "board_unchanged": false,
+      "transient_pixels": 817,
+      "transient_bbox": [
+        0,
+        0,
+        62,
+        63
+      ]
+    }
+  },
+  "viewer_steps": [],
+  "replay_url": "solver_analysis/ar25-0c556536_p0.html",
+  "levels_completed": 2,
+  "total_levels": 8,
+  "actions_per_level": [
+    17,
+    56,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "final_score": 7.6232993197278915
+}

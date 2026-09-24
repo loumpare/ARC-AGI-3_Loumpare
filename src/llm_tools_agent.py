@@ -211,6 +211,22 @@ MAX_BRAIN_CALLS_TOTAL = 20     # hard ceiling across the WHOLE game regardless o
                                # risk the original per-game cap was created to avoid, just no longer
                                # assuming one level is the only puzzle a game will ever present.
 
+# BRAIN_EVERY_ACTION: exploratory-only override to make this local heuristic agent
+# consult the brain far more densely, approximating Duck Harness's real per-turn
+# reasoning pattern (which this agent normally doesn't match -- confirmed
+# empirically 2026-09-24: only 4 brain calls across 151 actions on sb26, since
+# MAX_BRAIN_CALLS/periodic interval/DIRECT_ACTION_REPEAT all suppress consultation
+# by design). Only touches the decision points that already call the brain
+# (bootstrap + "need a new goal"); does NOT rewire path-following/extra-step/
+# pure-click branches to consult the brain too -- that would be a much bigger
+# change to an agent this heuristic-tuned. Env-gated so default behavior for
+# every other use of this module (including llm_tools_vision_agent.py's import
+# of MAX_BRAIN_CALLS) is completely unaffected.
+BRAIN_EVERY_ACTION = bool(os.environ.get("BRAIN_EVERY_ACTION"))
+if BRAIN_EVERY_ACTION:
+    MAX_BRAIN_CALLS = 10_000
+    MAX_BRAIN_CALLS_TOTAL = 10_000
+
 DIRECT_ACTION_REPEAT = 4  # when the brain suggests trying an action directly (self never
                            # identified -- movement laws show nothing spatial), commit to
                            # repeating that SAME action for this many turns instead of just
@@ -841,6 +857,14 @@ def _bfs_path(grid: np.ndarray, start: tuple[int, int], target_bbox: tuple,
 def _query_brain(prompt: str, system_prompt: str = BRAIN_SYSTEM_PROMPT) -> str:
     if _ollama_available():
         import requests
+        options = {"temperature": 0.4}
+        # BRAIN_NUM_PREDICT: exploratory local check of the same hypothesis tested
+        # for real on Kaggle (LOCAL_ANALYZER_MAX_OUTPUT) -- reasoning_length_vs_outcome
+        # memory found the shortest-reasoning quintile has ~3x the real model's
+        # progress rate. Unset by default (unlimited, Ollama's own default).
+        num_predict = os.environ.get("BRAIN_NUM_PREDICT")
+        if num_predict:
+            options["num_predict"] = int(num_predict)
         resp = requests.post(OLLAMA_URL, json={
             "model": BRAIN_MODEL,
             "messages": [
@@ -848,7 +872,7 @@ def _query_brain(prompt: str, system_prompt: str = BRAIN_SYSTEM_PROMPT) -> str:
                 {"role": "user", "content": prompt},
             ],
             "stream": False,
-            "options": {"temperature": 0.4},
+            "options": options,
         }, timeout=120)
         resp.raise_for_status()
         return resp.json()["message"]["content"]
@@ -1456,7 +1480,10 @@ class ToolsAgent(Agent):
 
     def _periodic_due(self) -> bool:
         # ported from llm_tools_vision_agent.py's "shared" mode -- see MODEL_TRIGGER_INTERVAL
-        return (self.action_counter > 0 and self.action_counter % MODEL_TRIGGER_INTERVAL == 0
+        interval_due = BRAIN_EVERY_ACTION or (
+            self.action_counter > 0 and self.action_counter % MODEL_TRIGGER_INTERVAL == 0
+        )
+        return (interval_due
                 and self.brain_calls_this_level < MAX_BRAIN_CALLS
                 and self.brain_call_count < MAX_BRAIN_CALLS_TOTAL)
 
@@ -1872,7 +1899,8 @@ class ToolsAgent(Agent):
                 self.prev_grid = grid
                 self.prev_action_name = action.name
                 return action
-            if self.direct_action_repeat_remaining > 0 and self.direct_action_repeat_name in legal_names:
+            if (not BRAIN_EVERY_ACTION and self.direct_action_repeat_remaining > 0
+                    and self.direct_action_repeat_name in legal_names):
                 # mid-commitment to a brain-suggested action -- see DIRECT_ACTION_REPEAT.
                 # Skip round-robin/brain-consult entirely this turn, just repeat it.
                 self.direct_action_repeat_remaining -= 1
@@ -1919,7 +1947,8 @@ class ToolsAgent(Agent):
 
         # need a new goal?
         if not self.current_path:
-            if self.direct_action_repeat_remaining > 0 and self.direct_action_repeat_name in legal_names:
+            if (not BRAIN_EVERY_ACTION and self.direct_action_repeat_remaining > 0
+                    and self.direct_action_repeat_name in legal_names):
                 # mid-commitment to a brain-suggested non-spatial action -- give it
                 # DIRECT_ACTION_REPEAT tries before re-consulting, same pattern the
                 # bootstrap branch above already uses (see DIRECT_ACTION_REPEAT).
