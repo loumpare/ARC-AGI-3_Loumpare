@@ -1,0 +1,27 @@
+{
+  "id": "loumitrmas/arc-agi-3-real-notebook-submission",
+  "id_no": 134124862,
+  "title": "ARC AGI 3 Real Notebook Submission",
+  "code_file": "arc-agi-3-real-notebook-submission.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": false,
+  "keywords": [
+    "gpu"
+  ],
+  "dataset_sources": [
+    "driessmit1/arc3-vllm-h100-wheelhouse-v3",
+    "jeroencottaar/taaf-kaggle-source-share",
+    "driessmit1/vrfai-qwen3-6-27b-fp8-hf-snapshot"
+  ],
+  "kernel_sources": [],
+  "competition_sources": [
+    "arc-prize-2026-arc-agi-3"
+  ],
+  "model_sources": [],
+  "docker_image": "gcr.io/kaggle-private-byod/python@sha256:37c64f7dd9c54116ecd1bcc88817c5469b88387388fade02bfa8bf3fc647d461",
+  "machine_shape": "NvidiaRtxPro6000"
+}

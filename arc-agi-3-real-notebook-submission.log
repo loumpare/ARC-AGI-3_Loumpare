@@ -1,0 +1,590 @@
+[{"stream_name":"stderr","time":8.072226156,"data":"/usr/local/lib/python3.12/dist-packages/nbformat/__init__.py:96: MissingIDFieldWarning: Cell is missing an id field, this will become a hard error in future nbformat versions. You may want to use `normalize()` on your notebooks before validations (available since nbformat 5.1.4). Previous versions of nbformat are fixing this issue transparently, and will stop doing so in the future.\n"}
+,{"stream_name":"stderr","time":8.072302733,"data":"  validate(nb)\n"}
+,{"stream_name":"stderr","time":9.229541782,"data":"0.00s - Debugger warning: It seems that frozen modules are being used, which may\n"}
+,{"stream_name":"stderr","time":9.22957734,"data":"0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off\n"}
+,{"stream_name":"stderr","time":9.229583539,"data":"0.00s - to python to disable frozen modules.\n"}
+,{"stream_name":"stderr","time":9.229588268,"data":"0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.\n"}
+,{"stream_name":"stderr","time":10.05900828,"data":"0.00s - Debugger warning: It seems that frozen modules are being used, which may\n"}
+,{"stream_name":"stderr","time":10.059068464,"data":"0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off\n"}
+,{"stream_name":"stderr","time":10.059076734,"data":"0.00s - to python to disable frozen modules.\n"}
+,{"stream_name":"stderr","time":10.059081269,"data":"0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.\n"}
+,{"stream_name":"stdout","time":11.464431029,"data":"taaf.kaggle: TRUE_SUBMISSION=False\n"}
+,{"stream_name":"stdout","time":16.326336792,"data":"taaf.kaggle: source bundle = /kaggle/input/datasets/jeroencottaar/taaf-kaggle-source-share\n"}
+,{"stream_name":"stdout","time":16.326386519,"data":"taaf.kaggle: input paths = {\"driessmit1/arc3-vllm-h100-wheelhouse-v3\": \"/kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3\", \"driessmit1/vrfai-qwen3-6-27b-fp8-hf-snapshot\": \"/kaggle/input/datasets/driessmit1/vrfai-qwen3-6-27b-fp8-hf-snapshot\", \"jeroencottaar/taaf-kaggle-source-share\": \"/kaggle/input/datasets/jeroencottaar/taaf-kaggle-source-share\"}\n"}
+,{"stream_name":"stdout","time":16.380179711,"data":"taaf.kaggle: wrote /usr/local/lib/python3.12/dist-packages/taaf_kaggle_sources.pth (3 source roots)\n"}
+,{"stream_name":"stdout","time":16.380218002,"data":"taaf.kaggle: setup command: \"$PYTHON\" - \u003c\u003c'PYSETUP'\n"}
+,{"stream_name":"stdout","time":16.380231084,"data":"import json\n"}
+,{"stream_name":"stdout","time":16.380235075,"data":"import os\n"}
+,{"stream_name":"stdout","time":16.380238658,"data":"import shutil\n"}
+,{"stream_name":"stdout","time":16.380242348,"data":"import subprocess\n"}
+,{"stream_name":"stdout","time":16.380245921,"data":"import sys\n"}
+,{"stream_name":"stdout","time":16.380249381,"data":"import time\n"}
+,{"stream_name":"stdout","time":16.380253083,"data":"import urllib.request\n"}
+,{"stream_name":"stdout","time":16.380256548,"data":"from pathlib import Path\n"}
+,{"stream_name":"stdout","time":16.380259941,"data":"\n"}
+,{"stream_name":"stdout","time":16.380263384,"data":"WHEELHOUSE_OWNER = 'driessmit1'\n"}
+,{"stream_name":"stdout","time":16.380266886,"data":"WHEELHOUSE_SLUG = 'arc3-vllm-h100-wheelhouse-v3'\n"}
+,{"stream_name":"stdout","time":16.380270413,"data":"MODEL_OWNER = 'driessmit1'\n"}
+,{"stream_name":"stdout","time":16.380273857,"data":"MODEL_SLUG = 'vrfai-qwen3-6-27b-fp8-hf-snapshot'\n"}
+,{"stream_name":"stdout","time":16.3802774,"data":"SERVED_MODEL_NAME = 'vrfai/Qwen3.6-27B-FP8'\n"}
+,{"stream_name":"stdout","time":16.380280904,"data":"VLLM_HOST = '127.0.0.1'\n"}
+,{"stream_name":"stdout","time":16.380296944,"data":"VLLM_PORT = 1234\n"}
+,{"stream_name":"stdout","time":16.380301083,"data":"VLLM_BASE_URL = f'http://{VLLM_HOST}:{VLLM_PORT}/v1'\n"}
+,{"stream_name":"stdout","time":16.380305266,"data":"VLLM_MAX_MODEL_LEN = 65536\n"}
+,{"stream_name":"stdout","time":16.380307921,"data":"ANALYZER_CONTEXT_WINDOW = 32768\n"}
+,{"stream_name":"stdout","time":16.380310627,"data":"VLLM_TENSOR_PARALLEL_SIZE = 1\n"}
+,{"stream_name":"stdout","time":16.380313218,"data":"WORKING_DIR = Path(os.environ['TAAF_KAGGLE_WORKING_DIR'])\n"}
+,{"stream_name":"stdout","time":16.380315901,"data":"SITE_PACKAGES = WORKING_DIR / 'vllm-site-packages'\n"}
+,{"stream_name":"stdout","time":16.380318664,"data":"VLLM_SERVER_LOG = WORKING_DIR / 'vllm-openai-server.log'\n"}
+,{"stream_name":"stdout","time":16.380321304,"data":"VLLM_SERVER_PID = WORKING_DIR / 'vllm-openai-server.pid'\n"}
+,{"stream_name":"stdout","time":16.380323914,"data":"INSTALL_STAMP = SITE_PACKAGES / f'.{WHEELHOUSE_SLUG}'\n"}
+,{"stream_name":"stdout","time":16.380326526,"data":"STAMP_TEXT = 'vllm==0.19.0 torch==2.10.0 flashinfer==0.6.6\\n'\n"}
+,{"stream_name":"stdout","time":16.38032928,"data":"\n"}
+,{"stream_name":"stdout","time":16.380331797,"data":"GPU_NAME_PATTERNS = {'rtx-pro-6000': ('rtx pro 6000',), 'h100': ('h100',), 'l4': ('l4',)}\n"}
+,{"stream_name":"stdout","time":16.38033456,"data":"\n"}
+,{"stream_name":"stdout","time":16.380337061,"data":"\n"}
+,{"stream_name":"stdout","time":16.380339605,"data":"def taaf_kaggle_input_paths() -\u003e dict[str, Path]:\n"}
+,{"stream_name":"stdout","time":16.380342377,"data":"    raw = os.getenv('TAAF_KAGGLE_INPUT_PATHS', '').strip()\n"}
+,{"stream_name":"stdout","time":16.38034504,"data":"    if not raw:\n"}
+,{"stream_name":"stdout","time":16.380347651,"data":"        return {}\n"}
+,{"stream_name":"stdout","time":16.380350249,"data":"    data = json.loads(raw)\n"}
+,{"stream_name":"stdout","time":16.38035291,"data":"    if not isinstance(data, dict):\n"}
+,{"stream_name":"stdout","time":16.380355524,"data":"        raise RuntimeError('TAAF_KAGGLE_INPUT_PATHS must contain a JSON object.')\n"}
+,{"stream_name":"stdout","time":16.380358225,"data":"    return {str(ref): Path(str(path)) for ref, path in data.items()}\n"}
+,{"stream_name":"stdout","time":16.38036093,"data":"\n"}
+,{"stream_name":"stdout","time":16.380363436,"data":"\n"}
+,{"stream_name":"stdout","time":16.380366206,"data":"def resolve_kaggle_dataset_path(owner: str, slug: str) -\u003e Path:\n"}
+,{"stream_name":"stdout","time":16.380373171,"data":"    mapped = taaf_kaggle_input_paths().get(f'{owner}/{slug}')\n"}
+,{"stream_name":"stdout","time":16.380375925,"data":"    if mapped is not None:\n"}
+,{"stream_name":"stdout","time":16.380378529,"data":"        return mapped\n"}
+,{"stream_name":"stdout","time":16.380381168,"data":"    for dataset_path in (Path('/kaggle/input') / slug, Path('/kaggle/input/datasets') / owner / slug):\n"}
+,{"stream_name":"stdout","time":16.380383951,"data":"        if dataset_path.exists():\n"}
+,{"stream_name":"stdout","time":16.38038663,"data":"            return dataset_path\n"}
+,{"stream_name":"stdout","time":16.380389244,"data":"    return Path('/kaggle/input') / slug\n"}
+,{"stream_name":"stdout","time":16.380391898,"data":"\n"}
+,{"stream_name":"stdout","time":16.380394461,"data":"\n"}
+,{"stream_name":"stdout","time":16.380397028,"data":"WHEELHOUSE = resolve_kaggle_dataset_path(WHEELHOUSE_OWNER, WHEELHOUSE_SLUG)\n"}
+,{"stream_name":"stdout","time":16.380399744,"data":"MODEL_PATH = resolve_kaggle_dataset_path(MODEL_OWNER, MODEL_SLUG)\n"}
+,{"stream_name":"stdout","time":16.380405644,"data":"\n"}
+,{"stream_name":"stdout","time":16.38040826,"data":"\n"}
+,{"stream_name":"stdout","time":16.380410895,"data":"def assert_expected_cuda_gpu() -\u003e None:\n"}
+,{"stream_name":"stdout","time":16.38041463,"data":"    if not Path('/kaggle/input').exists():\n"}
+,{"stream_name":"stdout","time":16.380417392,"data":"        return\n"}
+,{"stream_name":"stdout","time":16.380420029,"data":"    assert shutil.which('nvidia-smi'), 'CUDA GPU check failed: nvidia-smi is not available.'\n"}
+,{"stream_name":"stdout","time":16.38042283,"data":"    result = subprocess.run(['nvidia-smi', '--query-gpu=name', '--format=csv,noheader'], capture_output=True, text=True)\n"}
+,{"stream_name":"stdout","time":16.380425625,"data":"    assert result.returncode == 0, f'nvidia-smi failed: {result.stderr.strip()}'\n"}
+,{"stream_name":"stdout","time":16.380428322,"data":"    gpu_names = [line.strip() for line in result.stdout.splitlines() if line.strip()]\n"}
+,{"stream_name":"stdout","time":16.380431034,"data":"    assert gpu_names, 'nvidia-smi did not report any CUDA GPUs.'\n"}
+,{"stream_name":"stdout","time":16.380433746,"data":"    expected_gpu_type = os.getenv('KAGGLE_GPU_TYPE', 'rtx-pro-6000').strip().lower()\n"}
+,{"stream_name":"stdout","time":16.380436535,"data":"    expected_count = os.getenv('KAGGLE_GPU_COUNT', '1')\n"}
+,{"stream_name":"stdout","time":16.380445528,"data":"    if expected_count.isdigit():\n"}
+,{"stream_name":"stdout","time":16.380448252,"data":"        assert len(gpu_names) == int(expected_count), f'Expected {expected_count} CUDA GPU(s), found {gpu_names}'\n"}
+,{"stream_name":"stdout","time":16.38045102,"data":"    patterns = GPU_NAME_PATTERNS.get(expected_gpu_type, (expected_gpu_type.replace('-', ' '),))\n"}
+,{"stream_name":"stdout","time":16.380453737,"data":"    mismatched = [name for name in gpu_names if not any(pattern in name.lower() for pattern in patterns)]\n"}
+,{"stream_name":"stdout","time":16.380456463,"data":"    assert not mismatched, f'Expected GPU type {expected_gpu_type!r}, found {gpu_names}'\n"}
+,{"stream_name":"stdout","time":16.380459181,"data":"    print(f'CUDA GPU check passed for {expected_gpu_type} x{expected_count}: {gpu_names}', flush=True)\n"}
+,{"stream_name":"stdout","time":16.38046198,"data":"\n"}
+,{"stream_name":"stdout","time":16.380464491,"data":"\n"}
+,{"stream_name":"stdout","time":16.380470301,"data":"def vllm_env() -\u003e dict[str, str]:\n"}
+,{"stream_name":"stdout","time":16.38047306,"data":"    env = os.environ.copy()\n"}
+,{"stream_name":"stdout","time":16.380475673,"data":"    existing = env.get('PYTHONPATH', '')\n"}
+,{"stream_name":"stdout","time":16.380478284,"data":"    env['PYTHONPATH'] = str(SITE_PACKAGES) if not existing else f'{SITE_PACKAGES}{os.pathsep}{existing}'\n"}
+,{"stream_name":"stdout","time":16.380481032,"data":"    env.update(\n"}
+,{"stream_name":"stdout","time":16.380483593,"data":"        {\n"}
+,{"stream_name":"stdout","time":16.380486228,"data":"            'USE_TF': '0',\n"}
+,{"stream_name":"stdout","time":16.380488833,"data":"            'TRANSFORMERS_NO_TF': '1',\n"}
+,{"stream_name":"stdout","time":16.380491471,"data":"            'TRANSFORMERS_NO_TORCHVISION': '1',\n"}
+,{"stream_name":"stdout","time":16.380494118,"data":"            'VLLM_NO_USAGE_STATS': '1',\n"}
+,{"stream_name":"stdout","time":16.380496741,"data":"        }\n"}
+,{"stream_name":"stdout","time":16.380499367,"data":"    )\n"}
+,{"stream_name":"stdout","time":16.380501944,"data":"    return env\n"}
+,{"stream_name":"stdout","time":16.380504504,"data":"\n"}
+,{"stream_name":"stdout","time":16.380507099,"data":"\n"}
+,{"stream_name":"stdout","time":16.380511825,"data":"def cached_install_is_usable() -\u003e bool:\n"}
+,{"stream_name":"stdout","time":16.380514607,"data":"    if not INSTALL_STAMP.exists() or INSTALL_STAMP.read_text(encoding='utf-8') != STAMP_TEXT:\n"}
+,{"stream_name":"stdout","time":16.380517306,"data":"        return False\n"}
+,{"stream_name":"stdout","time":16.38052061,"data":"    result = subprocess.run(\n"}
+,{"stream_name":"stdout","time":16.380524295,"data":"        [sys.executable, '-c', \"import vllm, torch; print(f'Cached vLLM {vllm.__version__}, torch {torch.__version__}')\"],\n"}
+,{"stream_name":"stdout","time":16.380528731,"data":"        env=vllm_env(),\n"}
+,{"stream_name":"stdout","time":16.380532639,"data":"        text=True,\n"}
+,{"stream_name":"stdout","time":16.380535352,"data":"    )\n"}
+,{"stream_name":"stdout","time":16.380537884,"data":"    return result.returncode == 0\n"}
+,{"stream_name":"stdout","time":16.380540526,"data":"\n"}
+,{"stream_name":"stdout","time":16.380543038,"data":"\n"}
+,{"stream_name":"stdout","time":16.380545542,"data":"def install_vllm_wheelhouse() -\u003e None:\n"}
+,{"stream_name":"stdout","time":16.380548605,"data":"    requirements = WHEELHOUSE / 'requirements.lock'\n"}
+,{"stream_name":"stdout","time":16.380551289,"data":"    if not requirements.exists():\n"}
+,{"stream_name":"stdout","time":16.380553931,"data":"        raise FileNotFoundError(f'Missing wheelhouse lock file: {requirements}')\n"}
+,{"stream_name":"stdout","time":16.380556689,"data":"    if cached_install_is_usable():\n"}
+,{"stream_name":"stdout","time":16.380559285,"data":"        print(f'Using cached vLLM target install at {SITE_PACKAGES}', flush=True)\n"}
+,{"stream_name":"stdout","time":16.380562053,"data":"        return\n"}
+,{"stream_name":"stdout","time":16.380564605,"data":"    shutil.rmtree(SITE_PACKAGES, ignore_errors=True)\n"}
+,{"stream_name":"stdout","time":16.380567213,"data":"    SITE_PACKAGES.mkdir(parents=True, exist_ok=True)\n"}
+,{"stream_name":"stdout","time":16.38056982,"data":"    cmd = [\n"}
+,{"stream_name":"stdout","time":16.380572402,"data":"        sys.executable,\n"}
+,{"stream_name":"stdout","time":16.380574989,"data":"        '-m',\n"}
+,{"stream_name":"stdout","time":16.380577557,"data":"        'pip',\n"}
+,{"stream_name":"stdout","time":16.380580105,"data":"        'install',\n"}
+,{"stream_name":"stdout","time":16.380582662,"data":"        '--no-index',\n"}
+,{"stream_name":"stdout","time":16.38058522,"data":"        '--find-links',\n"}
+,{"stream_name":"stdout","time":16.380587772,"data":"        str(WHEELHOUSE),\n"}
+,{"stream_name":"stdout","time":16.380590339,"data":"        '--requirement',\n"}
+,{"stream_name":"stdout","time":16.380592909,"data":"        str(requirements),\n"}
+,{"stream_name":"stdout","time":16.380595595,"data":"        '--target',\n"}
+,{"stream_name":"stdout","time":16.380598264,"data":"        str(SITE_PACKAGES),\n"}
+,{"stream_name":"stdout","time":16.38060084,"data":"        '--upgrade',\n"}
+,{"stream_name":"stdout","time":16.38060339,"data":"        '--ignore-installed',\n"}
+,{"stream_name":"stdout","time":16.380605984,"data":"        '--only-binary',\n"}
+,{"stream_name":"stdout","time":16.380608556,"data":"        ':all:',\n"}
+,{"stream_name":"stdout","time":16.380611137,"data":"        '--no-compile',\n"}
+,{"stream_name":"stdout","time":16.380613711,"data":"        '--disable-pip-version-check',\n"}
+,{"stream_name":"stdout","time":16.380616301,"data":"        '--no-warn-conflicts',\n"}
+,{"stream_name":"stdout","time":16.380618946,"data":"    ]\n"}
+,{"stream_name":"stdout","time":16.380625403,"data":"    print('Installing vLLM wheelhouse into', SITE_PACKAGES, flush=True)\n"}
+,{"stream_name":"stdout","time":16.380628237,"data":"    subprocess.run(cmd, check=True)\n"}
+,{"stream_name":"stdout","time":16.380630842,"data":"    INSTALL_STAMP.write_text(STAMP_TEXT, encoding='utf-8')\n"}
+,{"stream_name":"stdout","time":16.380633498,"data":"\n"}
+,{"stream_name":"stdout","time":16.380635965,"data":"\n"}
+,{"stream_name":"stdout","time":16.380638478,"data":"def request_json(url: str, payload: dict | None = None, timeout: int = 30) -\u003e dict:\n"}
+,{"stream_name":"stdout","time":16.380641257,"data":"    data = None if payload is None else json.dumps(payload).encode('utf-8')\n"}
+,{"stream_name":"stdout","time":16.380643989,"data":"    request = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'})\n"}
+,{"stream_name":"stdout","time":16.380646703,"data":"    with urllib.request.urlopen(request, timeout=timeout) as response:\n"}
+,{"stream_name":"stdout","time":16.380649468,"data":"        return json.loads(response.read().decode('utf-8'))\n"}
+,{"stream_name":"stdout","time":16.380652118,"data":"\n"}
+,{"stream_name":"stdout","time":16.380654602,"data":"\n"}
+,{"stream_name":"stdout","time":16.380657084,"data":"def tail_server_log(lines: int = 80) -\u003e str:\n"}
+,{"stream_name":"stdout","time":16.380659835,"data":"    if not VLLM_SERVER_LOG.exists():\n"}
+,{"stream_name":"stdout","time":16.380662452,"data":"        return ''\n"}
+,{"stream_name":"stdout","time":16.380665104,"data":"    return '\\n'.join(VLLM_SERVER_LOG.read_text(encoding='utf-8', errors='replace').splitlines()[-lines:])\n"}
+,{"stream_name":"stdout","time":16.380667877,"data":"\n"}
+,{"stream_name":"stdout","time":16.380670357,"data":"\n"}
+,{"stream_name":"stdout","time":16.380672845,"data":"def wait_for_vllm_server(timeout_seconds: int = 900) -\u003e None:\n"}
+,{"stream_name":"stdout","time":16.380675529,"data":"    deadline = time.monotonic() + timeout_seconds\n"}
+,{"stream_name":"stdout","time":16.380678126,"data":"    url = f'{VLLM_BASE_URL}/models'\n"}
+,{"stream_name":"stdout","time":16.380680718,"data":"    while time.monotonic() \u003c deadline:\n"}
+,{"stream_name":"stdout","time":16.380683377,"data":"        if VLLM_SERVER_PID.exists():\n"}
+,{"stream_name":"stdout","time":16.380686029,"data":"            try:\n"}
+,{"stream_name":"stdout","time":16.38068862,"data":"                os.kill(int(VLLM_SERVER_PID.read_text().strip()), 0)\n"}
+,{"stream_name":"stdout","time":16.380691288,"data":"            except OSError as exc:\n"}
+,{"stream_name":"stdout","time":16.380693915,"data":"                raise RuntimeError(f'vLLM server process is not alive: {exc}\\n{tail_server_log()}') from exc\n"}
+,{"stream_name":"stdout","time":16.38069729,"data":"        try:\n"}
+,{"stream_name":"stdout","time":16.380700097,"data":"            models = request_json(url, timeout=5)\n"}
+,{"stream_name":"stdout","time":16.380702724,"data":"            print('vLLM server ready:', models, flush=True)\n"}
+,{"stream_name":"stdout","time":16.380705392,"data":"            return\n"}
+,{"stream_name":"stdout","time":16.380708112,"data":"        except Exception:\n"}
+,{"stream_name":"stdout","time":16.380710723,"data":"            time.sleep(5)\n"}
+,{"stream_name":"stdout","time":16.380713344,"data":"    raise TimeoutError(f'Timed out waiting for vLLM server at {url}.\\nLast server log lines:\\n{tail_server_log()}')\n"}
+,{"stream_name":"stdout","time":16.380716227,"data":"\n"}
+,{"stream_name":"stdout","time":16.380718704,"data":"\n"}
+,{"stream_name":"stdout","time":16.380721225,"data":"def start_vllm_server() -\u003e None:\n"}
+,{"stream_name":"stdout","time":16.380725907,"data":"    install_vllm_wheelhouse()\n"}
+,{"stream_name":"stdout","time":16.380728584,"data":"    VLLM_SERVER_LOG.parent.mkdir(parents=True, exist_ok=True)\n"}
+,{"stream_name":"stdout","time":16.380731241,"data":"    VLLM_SERVER_PID.unlink(missing_ok=True)\n"}
+,{"stream_name":"stdout","time":16.380733842,"data":"    log_handle = VLLM_SERVER_LOG.open('w', encoding='utf-8')\n"}
+,{"stream_name":"stdout","time":16.380736574,"data":"    cmd = [\n"}
+,{"stream_name":"stdout","time":16.380745175,"data":"        sys.executable,\n"}
+,{"stream_name":"stdout","time":16.380747809,"data":"        '-m',\n"}
+,{"stream_name":"stdout","time":16.380750395,"data":"        'vllm.entrypoints.openai.api_server',\n"}
+,{"stream_name":"stdout","time":16.380752997,"data":"        '--model',\n"}
+,{"stream_name":"stdout","time":16.380755557,"data":"        str(MODEL_PATH),\n"}
+,{"stream_name":"stdout","time":16.380758169,"data":"        '--served-model-name',\n"}
+,{"stream_name":"stdout","time":16.380760781,"data":"        SERVED_MODEL_NAME,\n"}
+,{"stream_name":"stdout","time":16.380763366,"data":"        '--host',\n"}
+,{"stream_name":"stdout","time":16.380766212,"data":"        VLLM_HOST,\n"}
+,{"stream_name":"stdout","time":16.380768805,"data":"        '--port',\n"}
+,{"stream_name":"stdout","time":16.380771369,"data":"        str(VLLM_PORT),\n"}
+,{"stream_name":"stdout","time":16.380773972,"data":"        '--tensor-parallel-size',\n"}
+,{"stream_name":"stdout","time":16.380776574,"data":"        str(VLLM_TENSOR_PARALLEL_SIZE),\n"}
+,{"stream_name":"stdout","time":16.380779209,"data":"        '--enable-auto-tool-choice',\n"}
+,{"stream_name":"stdout","time":16.380781792,"data":"        '--tool-call-parser',\n"}
+,{"stream_name":"stdout","time":16.380784361,"data":"        'qwen3_coder',\n"}
+,{"stream_name":"stdout","time":16.380786968,"data":"        '--generation-config',\n"}
+,{"stream_name":"stdout","time":16.380789555,"data":"        'vllm',\n"}
+,{"stream_name":"stdout","time":16.380792117,"data":"        '--enable-prefix-caching',\n"}
+,{"stream_name":"stdout","time":16.380794716,"data":"        '--default-chat-template-kwargs',\n"}
+,{"stream_name":"stdout","time":16.380803838,"data":"        '{\"preserve_thinking\": true}',\n"}
+,{"stream_name":"stdout","time":16.38080666,"data":"        '--reasoning-parser',\n"}
+,{"stream_name":"stdout","time":16.380809269,"data":"        'qwen3',\n"}
+,{"stream_name":"stdout","time":16.380811935,"data":"        '--max-model-len',\n"}
+,{"stream_name":"stdout","time":16.380814557,"data":"        str(VLLM_MAX_MODEL_LEN),\n"}
+,{"stream_name":"stdout","time":16.380817196,"data":"    ]\n"}
+,{"stream_name":"stdout","time":16.380819774,"data":"    print('Starting vLLM OpenAI server:', ' '.join(cmd), flush=True)\n"}
+,{"stream_name":"stdout","time":16.380822507,"data":"    process = subprocess.Popen(cmd, env=vllm_env(), stdout=log_handle, stderr=subprocess.STDOUT, text=True)\n"}
+,{"stream_name":"stdout","time":16.380825297,"data":"    VLLM_SERVER_PID.write_text(str(process.pid), encoding='utf-8')\n"}
+,{"stream_name":"stdout","time":16.380828097,"data":"    wait_for_vllm_server()\n"}
+,{"stream_name":"stdout","time":16.380830699,"data":"\n"}
+,{"stream_name":"stdout","time":16.380833207,"data":"\n"}
+,{"stream_name":"stdout","time":16.380835721,"data":"def run_vllm_api_smoke_test() -\u003e None:\n"}
+,{"stream_name":"stdout","time":16.380838457,"data":"    payload = {\n"}
+,{"stream_name":"stdout","time":16.380841038,"data":"        'model': SERVED_MODEL_NAME,\n"}
+,{"stream_name":"stdout","time":16.380846478,"data":"        'messages': [{'role': 'user', 'content': 'Answer in one short sentence: what is 2 + 2?'}],\n"}
+,{"stream_name":"stdout","time":16.380849289,"data":"        'temperature': 0.0,\n"}
+,{"stream_name":"stdout","time":16.380851929,"data":"        'max_tokens': 96,\n"}
+,{"stream_name":"stdout","time":16.380854524,"data":"        'chat_template_kwargs': {'enable_thinking': False},\n"}
+,{"stream_name":"stdout","time":16.380857188,"data":"    }\n"}
+,{"stream_name":"stdout","time":16.380859726,"data":"    response = request_json(f'{VLLM_BASE_URL}/chat/completions', payload=payload, timeout=120)\n"}
+,{"stream_name":"stdout","time":16.380862477,"data":"    generated = response['choices'][0]['message'].get('content', '').strip()\n"}
+,{"stream_name":"stdout","time":16.380865209,"data":"    print('\\n' + '=' * 88, flush=True)\n"}
+,{"stream_name":"stdout","time":16.380868322,"data":"    print('VLLM OPENAI SERVER QWEN SMOKE TEST REAL MODEL OUTPUT', flush=True)\n"}
+,{"stream_name":"stdout","time":16.380871086,"data":"    print('Generated:', generated, flush=True)\n"}
+,{"stream_name":"stdout","time":16.380873738,"data":"    print('=' * 88 + '\\n', flush=True)\n"}
+,{"stream_name":"stdout","time":16.380876427,"data":"\n"}
+,{"stream_name":"stdout","time":16.380878922,"data":"\n"}
+,{"stream_name":"stdout","time":16.380881406,"data":"print(f'vLLM wheelhouse path: {WHEELHOUSE}', flush=True)\n"}
+,{"stream_name":"stdout","time":16.380884019,"data":"print(f'Qwen model path: {MODEL_PATH}', flush=True)\n"}
+,{"stream_name":"stdout","time":16.38088666,"data":"assert_expected_cuda_gpu()\n"}
+,{"stream_name":"stdout","time":16.380889254,"data":"missing = [str(path) for path in (WHEELHOUSE, MODEL_PATH) if not path.exists()]\n"}
+,{"stream_name":"stdout","time":16.380891977,"data":"if missing:\n"}
+,{"stream_name":"stdout","time":16.380894575,"data":"    raise FileNotFoundError('Missing attached dataset path(s): ' + ', '.join(missing))\n"}
+,{"stream_name":"stdout","time":16.380897309,"data":"start_vllm_server()\n"}
+,{"stream_name":"stdout","time":16.380899854,"data":"run_vllm_api_smoke_test()\n"}
+,{"stream_name":"stdout","time":16.38090241,"data":"setup_env = {\n"}
+,{"stream_name":"stdout","time":16.380904949,"data":"    'USE_TF': '0',\n"}
+,{"stream_name":"stdout","time":16.380907504,"data":"    'TRANSFORMERS_NO_TF': '1',\n"}
+,{"stream_name":"stdout","time":16.380910218,"data":"    'TRANSFORMERS_NO_TORCHVISION': '1',\n"}
+,{"stream_name":"stdout","time":16.380912824,"data":"    'VLLM_NO_USAGE_STATS': '1',\n"}
+,{"stream_name":"stdout","time":16.380915554,"data":"    'PYTHONPATH': str(SITE_PACKAGES) + os.pathsep + os.environ.get('PYTHONPATH', ''),\n"}
+,{"stream_name":"stdout","time":16.380918264,"data":"    'LOCAL_ANALYZER_BASE_URL': VLLM_BASE_URL,\n"}
+,{"stream_name":"stdout","time":16.380920941,"data":"    'OPENAI_BASE_URL': VLLM_BASE_URL,\n"}
+,{"stream_name":"stdout","time":16.380923526,"data":"    'LOCAL_ANALYZER_PROVIDER': 'vllm',\n"}
+,{"stream_name":"stdout","time":16.380926111,"data":"    'OPENAI_PROVIDER': 'vllm',\n"}
+,{"stream_name":"stdout","time":16.380928703,"data":"    'LOCAL_ANALYZER_MODEL_ID': SERVED_MODEL_NAME,\n"}
+,{"stream_name":"stdout","time":16.380931313,"data":"    'INFERENCE_ANALYZER_MODEL': SERVED_MODEL_NAME,\n"}
+,{"stream_name":"stdout","time":16.380933916,"data":"    'LOCAL_ANALYZER_APP_NAME': 'ARC3 Agent Harness',\n"}
+,{"stream_name":"stdout","time":16.380936576,"data":"    'LOCAL_ANALYZER_CONTEXT_WINDOW': str(ANALYZER_CONTEXT_WINDOW),\n"}
+,{"stream_name":"stdout","time":16.380939244,"data":"    'LOCAL_ANALYZER_MAX_OUTPUT': '0',\n"}
+,{"stream_name":"stdout","time":16.380944173,"data":"    'LOCAL_ANALYZER_TOOL_STEPS': '0',\n"}
+,{"stream_name":"stdout","time":16.380946847,"data":"    'LOCAL_ANALYZER_TOOL_TIMEOUT': '30',\n"}
+,{"stream_name":"stdout","time":16.380949436,"data":"    'LOCAL_ANALYZER_TOOL_OUTPUT_TOKENS': '1024',\n"}
+,{"stream_name":"stdout","time":16.380952043,"data":"    'LOCAL_ANALYZER_YIELD_SECONDS': '60',\n"}
+,{"stream_name":"stdout","time":16.380954625,"data":"    'LOCAL_ANALYZER_TEMPERATURE': '0.6',\n"}
+,{"stream_name":"stdout","time":16.380957203,"data":"    'LOCAL_ANALYZER_TOP_P': '0.95',\n"}
+,{"stream_name":"stdout","time":16.380959835,"data":"    'LOCAL_ANALYZER_TOP_K': '20',\n"}
+,{"stream_name":"stdout","time":16.380962411,"data":"    'LOCAL_ANALYZER_ENABLE_THINKING': 'true',\n"}
+,{"stream_name":"stdout","time":16.380965018,"data":"    'MULTIMODAL_CONTEXT': 'current_grid',\n"}
+,{"stream_name":"stdout","time":16.380967618,"data":"    'MULTIMODAL_UPSCALE': '4',\n"}
+,{"stream_name":"stdout","time":16.380970195,"data":"}\n"}
+,{"stream_name":"stdout","time":16.380972738,"data":"setup_env_path = Path(os.environ['TAAF_KAGGLE_SETUP_ENV'])\n"}
+,{"stream_name":"stdout","time":16.380975367,"data":"existing_setup_env = {}\n"}
+,{"stream_name":"stdout","time":16.380977935,"data":"if setup_env_path.exists():\n"}
+,{"stream_name":"stdout","time":16.380980568,"data":"    existing_setup_env = json.loads(setup_env_path.read_text(encoding='utf-8'))\n"}
+,{"stream_name":"stdout","time":16.380983259,"data":"    if not isinstance(existing_setup_env, dict):\n"}
+,{"stream_name":"stdout","time":16.380985888,"data":"        raise RuntimeError('TAAF_KAGGLE_SETUP_ENV must contain a JSON object.')\n"}
+,{"stream_name":"stdout","time":16.380988566,"data":"existing_setup_env.update(setup_env)\n"}
+,{"stream_name":"stdout","time":16.38099119,"data":"setup_env_path.write_text(json.dumps(existing_setup_env, indent=2), encoding='utf-8')\n"}
+,{"stream_name":"stdout","time":16.380993915,"data":"\n"}
+,{"stream_name":"stdout","time":16.380996459,"data":"PYSETUP\n"}
+,{"stream_name":"stdout","time":16.52463215,"data":"vLLM wheelhouse path: /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3\n"}
+,{"stream_name":"stdout","time":16.524669403,"data":"Qwen model path: /kaggle/input/datasets/driessmit1/vrfai-qwen3-6-27b-fp8-hf-snapshot\n"}
+,{"stream_name":"stderr","time":16.525157497,"data":"Traceback (most recent call last):\n"}
+,{"stream_name":"stderr","time":16.525178443,"data":"  File \"\u003cstdin\u003e\", line 220, in \u003cmodule\u003e\n"}
+,{"stream_name":"stderr","time":16.525183893,"data":"  File \"\u003cstdin\u003e\", line 58, in assert_expected_cuda_gpu\n"}
+,{"stream_name":"stderr","time":16.525432596,"data":"AssertionError: CUDA GPU check failed: nvidia-smi is not available.\n"}
+,{"stream_name":"stdout","time":16.557170781,"data":"vLLM wheelhouse path: /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3\n"}
+,{"stream_name":"stdout","time":16.557211123,"data":"Qwen model path: /kaggle/input/datasets/driessmit1/vrfai-qwen3-6-27b-fp8-hf-snapshot\n"}
+,{"stream_name":"stderr","time":16.558651872,"data":"Traceback (most recent call last):\n"}
+,{"stream_name":"stderr","time":16.558686115,"data":"  File \"\u003cstdin\u003e\", line 220, in \u003cmodule\u003e\n"}
+,{"stream_name":"stderr","time":16.558692842,"data":"  File \"\u003cstdin\u003e\", line 58, in assert_expected_cuda_gpu\n"}
+,{"stream_name":"stderr","time":16.558698099,"data":"AssertionError: CUDA GPU check failed: nvidia-smi is not available.\n"}
+,{"stream_name":"stderr","time":16.558702165,"data":"\n"}
+,{"stream_name":"stderr","time":16.558723674,"data":"Traceback (most recent call last):\n"}
+,{"stream_name":"stderr","time":16.55872812,"data":"  File \"\u003cstdin\u003e\", line 220, in \u003cmodule\u003e\n"}
+,{"stream_name":"stderr","time":16.558732744,"data":"  File \"\u003cstdin\u003e\", line 58, in assert_expected_cuda_gpu\n"}
+,{"stream_name":"stderr","time":16.55873791,"data":"AssertionError: CUDA GPU check failed: nvidia-smi is not available.\n"}
+,{"stream_name":"stderr","time":16.997624605,"data":"Traceback (most recent call last):\n"}
+,{"stream_name":"stderr","time":16.997679447,"data":"  File \"\u003cstring\u003e\", line 1, in \u003cmodule\u003e\n"}
+,{"stream_name":"stderr","time":16.9976868,"data":"  File \"/usr/local/lib/python3.12/dist-packages/papermill/execute.py\", line 131, in execute_notebook\n"}
+,{"stream_name":"stderr","time":16.997700852,"data":"    raise_for_execution_errors(nb, output_path)\n"}
+,{"stream_name":"stderr","time":16.997913329,"data":"  File \"/usr/local/lib/python3.12/dist-packages/papermill/execute.py\", line 251, in raise_for_execution_errors\n"}
+,{"stream_name":"stderr","time":16.998080167,"data":"    raise error\n"}
+,{"stream_name":"stderr","time":16.998444032,"data":"papermill.exceptions.PapermillExecutionError: \n"}
+,{"stream_name":"stderr","time":16.998458929999998,"data":"---------------------------------------------------------------------------\n"}
+,{"stream_name":"stderr","time":16.998464362,"data":"Exception encountered at \"In [4]\":\n"}
+,{"stream_name":"stderr","time":16.998468176,"data":"---------------------------------------------------------------------------\n"}
+,{"stream_name":"stderr","time":16.998472622,"data":"CalledProcessError                        Traceback (most recent call last)\n"}
+,{"stream_name":"stderr","time":16.998476371,"data":"/tmp/ipykernel_16/2137133893.py in \u003ccell line: 0\u003e()\n"}
+,{"stream_name":"stderr","time":16.9984808,"data":"     36 for command in json.loads((BUNDLE_DIR / \"setup_commands.json\").read_text()):\n"}
+,{"stream_name":"stderr","time":16.998485324,"data":"     37     print(f\"taaf.kaggle: setup command: {command}\", flush=True)\n"}
+,{"stream_name":"stderr","time":16.998489485,"data":"---\u003e 38     subprocess.run(command, shell=True, check=True, cwd=WORKING_DIR, env=env)\n"}
+,{"stream_name":"stderr","time":16.998493863,"data":"     39     # Re-read in case the command persisted new env keys.\n"}
+,{"stream_name":"stderr","time":16.998498408,"data":"     40     env = _command_env()\n"}
+,{"stream_name":"stderr","time":16.998502351,"data":"\n"}
+,{"stream_name":"stderr","time":16.998506254,"data":"/usr/lib/python3.12/subprocess.py in run(input, capture_output, timeout, check, *popenargs, **kwargs)\n"}
+,{"stream_name":"stderr","time":16.9985104,"data":"    569         retcode = process.poll()\n"}
+,{"stream_name":"stderr","time":16.998514263,"data":"    570         if check and retcode:\n"}
+,{"stream_name":"stderr","time":16.998527905,"data":"--\u003e 571             raise CalledProcessError(retcode, process.args,\n"}
+,{"stream_name":"stderr","time":16.998542403,"data":"    572                                      output=stdout, stderr=stderr)\n"}
+,{"stream_name":"stderr","time":16.998546919,"data":"    573     return CompletedProcess(process.args, retcode, stdout, stderr)\n"}
+,{"stream_name":"stderr","time":16.998550995,"data":"\n"}
+,{"stream_name":"stderr","time":16.998554593,"data":"CalledProcessError: Command '\"$PYTHON\" - \u003c\u003c'PYSETUP'\n"}
+,{"stream_name":"stderr","time":16.99855913,"data":"import json\n"}
+,{"stream_name":"stderr","time":16.998563049,"data":"import os\n"}
+,{"stream_name":"stderr","time":16.998578768,"data":"import shutil\n"}
+,{"stream_name":"stderr","time":16.998582893,"data":"import subprocess\n"}
+,{"stream_name":"stderr","time":16.99858659,"data":"import sys\n"}
+,{"stream_name":"stderr","time":16.998590177,"data":"import time\n"}
+,{"stream_name":"stderr","time":16.998594517,"data":"import urllib.request\n"}
+,{"stream_name":"stderr","time":16.99859837,"data":"from pathlib import Path\n"}
+,{"stream_name":"stderr","time":16.998602169,"data":"\n"}
+,{"stream_name":"stderr","time":16.998605668,"data":"WHEELHOUSE_OWNER = 'driessmit1'\n"}
+,{"stream_name":"stderr","time":16.998610568,"data":"WHEELHOUSE_SLUG = 'arc3-vllm-h100-wheelhouse-v3'\n"}
+,{"stream_name":"stderr","time":16.998614572,"data":"MODEL_OWNER = 'driessmit1'\n"}
+,{"stream_name":"stderr","time":16.998618763,"data":"MODEL_SLUG = 'vrfai-qwen3-6-27b-fp8-hf-snapshot'\n"}
+,{"stream_name":"stderr","time":16.998622888,"data":"SERVED_MODEL_NAME = 'vrfai/Qwen3.6-27B-FP8'\n"}
+,{"stream_name":"stderr","time":16.998626831,"data":"VLLM_HOST = '127.0.0.1'\n"}
+,{"stream_name":"stderr","time":16.998631065,"data":"VLLM_PORT = 1234\n"}
+,{"stream_name":"stderr","time":16.998635221,"data":"VLLM_BASE_URL = f'http://{VLLM_HOST}:{VLLM_PORT}/v1'\n"}
+,{"stream_name":"stderr","time":16.99863966,"data":"VLLM_MAX_MODEL_LEN = 65536\n"}
+,{"stream_name":"stderr","time":16.998643985,"data":"ANALYZER_CONTEXT_WINDOW = 32768\n"}
+,{"stream_name":"stderr","time":16.998648577,"data":"VLLM_TENSOR_PARALLEL_SIZE = 1\n"}
+,{"stream_name":"stderr","time":16.9986526,"data":"WORKING_DIR = Path(os.environ['TAAF_KAGGLE_WORKING_DIR'])\n"}
+,{"stream_name":"stderr","time":16.998657485,"data":"SITE_PACKAGES = WORKING_DIR / 'vllm-site-packages'\n"}
+,{"stream_name":"stderr","time":16.998661782,"data":"VLLM_SERVER_LOG = WORKING_DIR / 'vllm-openai-server.log'\n"}
+,{"stream_name":"stderr","time":16.998665674,"data":"VLLM_SERVER_PID = WORKING_DIR / 'vllm-openai-server.pid'\n"}
+,{"stream_name":"stderr","time":16.998671165,"data":"INSTALL_STAMP = SITE_PACKAGES / f'.{WHEELHOUSE_SLUG}'\n"}
+,{"stream_name":"stderr","time":16.998675732,"data":"STAMP_TEXT = 'vllm==0.19.0 torch==2.10.0 flashinfer==0.6.6\\n'\n"}
+,{"stream_name":"stderr","time":16.998680087,"data":"\n"}
+,{"stream_name":"stderr","time":16.998686097,"data":"GPU_NAME_PATTERNS = {'rtx-pro-6000': ('rtx pro 6000',), 'h100': ('h100',), 'l4': ('l4',)}\n"}
+,{"stream_name":"stderr","time":16.998690777,"data":"\n"}
+,{"stream_name":"stderr","time":16.998694711,"data":"\n"}
+,{"stream_name":"stderr","time":16.998698545,"data":"def taaf_kaggle_input_paths() -\u003e dict[str, Path]:\n"}
+,{"stream_name":"stderr","time":16.99870309,"data":"    raw = os.getenv('TAAF_KAGGLE_INPUT_PATHS', '').strip()\n"}
+,{"stream_name":"stderr","time":16.998707487,"data":"    if not raw:\n"}
+,{"stream_name":"stderr","time":16.998711385,"data":"        return {}\n"}
+,{"stream_name":"stderr","time":16.998715570999998,"data":"    data = json.loads(raw)\n"}
+,{"stream_name":"stderr","time":16.99871987,"data":"    if not isinstance(data, dict):\n"}
+,{"stream_name":"stderr","time":16.998724094,"data":"        raise RuntimeError('TAAF_KAGGLE_INPUT_PATHS must contain a JSON object.')\n"}
+,{"stream_name":"stderr","time":16.998728728,"data":"    return {str(ref): Path(str(path)) for ref, path in data.items()}\n"}
+,{"stream_name":"stderr","time":16.998732813,"data":"\n"}
+,{"stream_name":"stderr","time":16.998737,"data":"\n"}
+,{"stream_name":"stderr","time":16.998741356,"data":"def resolve_kaggle_dataset_path(owner: str, slug: str) -\u003e Path:\n"}
+,{"stream_name":"stderr","time":16.998745939,"data":"    mapped = taaf_kaggle_input_paths().get(f'{owner}/{slug}')\n"}
+,{"stream_name":"stderr","time":16.998756212,"data":"    if mapped is not None:\n"}
+,{"stream_name":"stderr","time":16.998760949,"data":"        return mapped\n"}
+,{"stream_name":"stderr","time":16.998765533,"data":"    for dataset_path in (Path('/kaggle/input') / slug, Path('/kaggle/input/datasets') / owner / slug):\n"}
+,{"stream_name":"stderr","time":16.998769987,"data":"        if dataset_path.exists():\n"}
+,{"stream_name":"stderr","time":16.998774245,"data":"            return dataset_path\n"}
+,{"stream_name":"stderr","time":16.998778971,"data":"    return Path('/kaggle/input') / slug\n"}
+,{"stream_name":"stderr","time":16.99878343,"data":"\n"}
+,{"stream_name":"stderr","time":16.998787563,"data":"\n"}
+,{"stream_name":"stderr","time":16.998791751,"data":"WHEELHOUSE = resolve_kaggle_dataset_path(WHEELHOUSE_OWNER, WHEELHOUSE_SLUG)\n"}
+,{"stream_name":"stderr","time":16.998796312,"data":"MODEL_PATH = resolve_kaggle_dataset_path(MODEL_OWNER, MODEL_SLUG)\n"}
+,{"stream_name":"stderr","time":16.99880084,"data":"\n"}
+,{"stream_name":"stderr","time":16.998805356,"data":"\n"}
+,{"stream_name":"stderr","time":16.998809605,"data":"def assert_expected_cuda_gpu() -\u003e None:\n"}
+,{"stream_name":"stderr","time":16.998814151,"data":"    if not Path('/kaggle/input').exists():\n"}
+,{"stream_name":"stderr","time":16.998818778,"data":"        return\n"}
+,{"stream_name":"stderr","time":16.99882311,"data":"    assert shutil.which('nvidia-smi'), 'CUDA GPU check failed: nvidia-smi is not available.'\n"}
+,{"stream_name":"stderr","time":16.998827677,"data":"    result = subprocess.run(['nvidia-smi', '--query-gpu=name', '--format=csv,noheader'], capture_output=True, text=True)\n"}
+,{"stream_name":"stderr","time":16.998832616,"data":"    assert result.returncode == 0, f'nvidia-smi failed: {result.stderr.strip()}'\n"}
+,{"stream_name":"stderr","time":16.998837344000002,"data":"    gpu_names = [line.strip() for line in result.stdout.splitlines() if line.strip()]\n"}
+,{"stream_name":"stderr","time":16.998842188,"data":"    assert gpu_names, 'nvidia-smi did not report any CUDA GPUs.'\n"}
+,{"stream_name":"stderr","time":16.998846571,"data":"    expected_gpu_type = os.getenv('KAGGLE_GPU_TYPE', 'rtx-pro-6000').strip().lower()\n"}
+,{"stream_name":"stderr","time":16.998851491,"data":"    expected_count = os.getenv('KAGGLE_GPU_COUNT', '1')\n"}
+,{"stream_name":"stderr","time":16.998856284,"data":"    if expected_count.isdigit():\n"}
+,{"stream_name":"stderr","time":16.998860517,"data":"        assert len(gpu_names) == int(expected_count), f'Expected {expected_count} CUDA GPU(s), found {gpu_names}'\n"}
+,{"stream_name":"stderr","time":16.998865736,"data":"    patterns = GPU_NAME_PATTERNS.get(expected_gpu_type, (expected_gpu_type.replace('-', ' '),))\n"}
+,{"stream_name":"stderr","time":16.998870219,"data":"    mismatched = [name for name in gpu_names if not any(pattern in name.lower() for pattern in patterns)]\n"}
+,{"stream_name":"stderr","time":16.998887026,"data":"    assert not mismatched, f'Expected GPU type {expected_gpu_type!r}, found {gpu_names}'\n"}
+,{"stream_name":"stderr","time":16.998891874,"data":"    print(f'CUDA GPU check passed for {expected_gpu_type} x{expected_count}: {gpu_names}', flush=True)\n"}
+,{"stream_name":"stderr","time":16.998896471,"data":"\n"}
+,{"stream_name":"stderr","time":16.998900865,"data":"\n"}
+,{"stream_name":"stderr","time":16.998905259,"data":"def vllm_env() -\u003e dict[str, str]:\n"}
+,{"stream_name":"stderr","time":16.998909857,"data":"    env = os.environ.copy()\n"}
+,{"stream_name":"stderr","time":16.998914153,"data":"    existing = env.get('PYTHONPATH', '')\n"}
+,{"stream_name":"stderr","time":16.998922063,"data":"    env['PYTHONPATH'] = str(SITE_PACKAGES) if not existing else f'{SITE_PACKAGES}{os.pathsep}{existing}'\n"}
+,{"stream_name":"stderr","time":16.998927405,"data":"    env.update(\n"}
+,{"stream_name":"stderr","time":16.998932091,"data":"        {\n"}
+,{"stream_name":"stderr","time":16.998936153,"data":"            'USE_TF': '0',\n"}
+,{"stream_name":"stderr","time":16.998940325,"data":"            'TRANSFORMERS_NO_TF': '1',\n"}
+,{"stream_name":"stderr","time":16.998944724,"data":"            'TRANSFORMERS_NO_TORCHVISION': '1',\n"}
+,{"stream_name":"stderr","time":16.998949302,"data":"            'VLLM_NO_USAGE_STATS': '1',\n"}
+,{"stream_name":"stderr","time":16.998953409,"data":"        }\n"}
+,{"stream_name":"stderr","time":16.998957603,"data":"    )\n"}
+,{"stream_name":"stderr","time":16.998962206,"data":"    return env\n"}
+,{"stream_name":"stderr","time":16.998966784,"data":"\n"}
+,{"stream_name":"stderr","time":16.998971093,"data":"\n"}
+,{"stream_name":"stderr","time":16.998974899,"data":"def cached_install_is_usable() -\u003e bool:\n"}
+,{"stream_name":"stderr","time":16.998979514,"data":"    if not INSTALL_STAMP.exists() or INSTALL_STAMP.read_text(encoding='utf-8') != STAMP_TEXT:\n"}
+,{"stream_name":"stderr","time":16.998984055,"data":"        return False\n"}
+,{"stream_name":"stderr","time":16.998988345,"data":"    result = subprocess.run(\n"}
+,{"stream_name":"stderr","time":16.998992646,"data":"        [sys.executable, '-c', \"import vllm, torch; print(f'Cached vLLM {vllm.__version__}, torch {torch.__version__}')\"],\n"}
+,{"stream_name":"stderr","time":16.998997718,"data":"        env=vllm_env(),\n"}
+,{"stream_name":"stderr","time":16.999002094,"data":"        text=True,\n"}
+,{"stream_name":"stderr","time":16.999006679,"data":"    )\n"}
+,{"stream_name":"stderr","time":16.99901118,"data":"    return result.returncode == 0\n"}
+,{"stream_name":"stderr","time":16.999015835,"data":"\n"}
+,{"stream_name":"stderr","time":16.999053095,"data":"\n"}
+,{"stream_name":"stderr","time":16.999057689,"data":"def install_vllm_wheelhouse() -\u003e None:\n"}
+,{"stream_name":"stderr","time":16.999062744,"data":"    requirements = WHEELHOUSE / 'requirements.lock'\n"}
+,{"stream_name":"stderr","time":16.999067328,"data":"    if not requirements.exists():\n"}
+,{"stream_name":"stderr","time":16.999071251,"data":"        raise FileNotFoundError(f'Missing wheelhouse lock file: {requirements}')\n"}
+,{"stream_name":"stderr","time":16.999075604,"data":"    if cached_install_is_usable():\n"}
+,{"stream_name":"stderr","time":16.999080398,"data":"        print(f'Using cached vLLM target install at {SITE_PACKAGES}', flush=True)\n"}
+,{"stream_name":"stderr","time":16.999085497,"data":"        return\n"}
+,{"stream_name":"stderr","time":16.99908983,"data":"    shutil.rmtree(SITE_PACKAGES, ignore_errors=True)\n"}
+,{"stream_name":"stderr","time":16.999094294,"data":"    SITE_PACKAGES.mkdir(parents=True, exist_ok=True)\n"}
+,{"stream_name":"stderr","time":16.999098813,"data":"    cmd = [\n"}
+,{"stream_name":"stderr","time":16.999103231,"data":"        sys.executable,\n"}
+,{"stream_name":"stderr","time":16.999107634,"data":"        '-m',\n"}
+,{"stream_name":"stderr","time":16.999112013,"data":"        'pip',\n"}
+,{"stream_name":"stderr","time":16.999116133,"data":"        'install',\n"}
+,{"stream_name":"stderr","time":16.999120515,"data":"        '--no-index',\n"}
+,{"stream_name":"stderr","time":16.999124828,"data":"        '--find-links',\n"}
+,{"stream_name":"stderr","time":16.999128791,"data":"        str(WHEELHOUSE),\n"}
+,{"stream_name":"stderr","time":16.99913765,"data":"        '--requirement',\n"}
+,{"stream_name":"stderr","time":16.999142094,"data":"        str(requirements),\n"}
+,{"stream_name":"stderr","time":16.999146403,"data":"        '--target',\n"}
+,{"stream_name":"stderr","time":16.999150803,"data":"        str(SITE_PACKAGES),\n"}
+,{"stream_name":"stderr","time":16.999155443,"data":"        '--upgrade',\n"}
+,{"stream_name":"stderr","time":16.999160023,"data":"        '--ignore-installed',\n"}
+,{"stream_name":"stderr","time":16.999164487,"data":"        '--only-binary',\n"}
+,{"stream_name":"stderr","time":16.999169153,"data":"        ':all:',\n"}
+,{"stream_name":"stderr","time":16.999173372,"data":"        '--no-compile',\n"}
+,{"stream_name":"stderr","time":16.999192054,"data":"        '--disable-pip-version-check',\n"}
+,{"stream_name":"stderr","time":16.999196271,"data":"        '--no-warn-conflicts',\n"}
+,{"stream_name":"stderr","time":16.999200778,"data":"    ]\n"}
+,{"stream_name":"stderr","time":16.999204934,"data":"    print('Installing vLLM wheelhouse into', SITE_PACKAGES, flush=True)\n"}
+,{"stream_name":"stderr","time":16.999209461,"data":"    subprocess.run(cmd, check=True)\n"}
+,{"stream_name":"stderr","time":16.999213718,"data":"    INSTALL_STAMP.write_text(STAMP_TEXT, encoding='utf-8')\n"}
+,{"stream_name":"stderr","time":16.999218355,"data":"\n"}
+,{"stream_name":"stderr","time":16.999222654,"data":"\n"}
+,{"stream_name":"stderr","time":16.999228814,"data":"def request_json(url: str, payload: dict | None = None, timeout: int = 30) -\u003e dict:\n"}
+,{"stream_name":"stderr","time":16.999233521,"data":"    data = None if payload is None else json.dumps(payload).encode('utf-8')\n"}
+,{"stream_name":"stderr","time":16.999238189,"data":"    request = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'})\n"}
+,{"stream_name":"stderr","time":16.999242823,"data":"    with urllib.request.urlopen(request, timeout=timeout) as response:\n"}
+,{"stream_name":"stderr","time":16.999247434,"data":"        return json.loads(response.read().decode('utf-8'))\n"}
+,{"stream_name":"stderr","time":16.999251714,"data":"\n"}
+,{"stream_name":"stderr","time":16.999256139,"data":"\n"}
+,{"stream_name":"stderr","time":16.999260483,"data":"def tail_server_log(lines: int = 80) -\u003e str:\n"}
+,{"stream_name":"stderr","time":16.999265016,"data":"    if not VLLM_SERVER_LOG.exists():\n"}
+,{"stream_name":"stderr","time":16.999269357,"data":"        return ''\n"}
+,{"stream_name":"stderr","time":16.999273916,"data":"    return '\\n'.join(VLLM_SERVER_LOG.read_text(encoding='utf-8', errors='replace').splitlines()[-lines:])\n"}
+,{"stream_name":"stderr","time":16.999278808,"data":"\n"}
+,{"stream_name":"stderr","time":16.999283273,"data":"\n"}
+,{"stream_name":"stderr","time":16.999287642,"data":"def wait_for_vllm_server(timeout_seconds: int = 900) -\u003e None:\n"}
+,{"stream_name":"stderr","time":16.999291965,"data":"    deadline = time.monotonic() + timeout_seconds\n"}
+,{"stream_name":"stderr","time":16.999296344,"data":"    url = f'{VLLM_BASE_URL}/models'\n"}
+,{"stream_name":"stderr","time":16.999300624,"data":"    while time.monotonic() \u003c deadline:\n"}
+,{"stream_name":"stderr","time":16.99930518,"data":"        if VLLM_SERVER_PID.exists():\n"}
+,{"stream_name":"stderr","time":16.999310313,"data":"            try:\n"}
+,{"stream_name":"stderr","time":16.999314457,"data":"                os.kill(int(VLLM_SERVER_PID.read_text().strip()), 0)\n"}
+,{"stream_name":"stderr","time":16.999319276,"data":"            except OSError as exc:\n"}
+,{"stream_name":"stderr","time":16.999327259,"data":"                raise RuntimeError(f'vLLM server process is not alive: {exc}\\n{tail_server_log()}') from exc\n"}
+,{"stream_name":"stderr","time":16.999332459,"data":"        try:\n"}
+,{"stream_name":"stderr","time":16.999336777,"data":"            models = request_json(url, timeout=5)\n"}
+,{"stream_name":"stderr","time":16.999341803,"data":"            print('vLLM server ready:', models, flush=True)\n"}
+,{"stream_name":"stderr","time":16.999346599,"data":"            return\n"}
+,{"stream_name":"stderr","time":16.999350686,"data":"        except Exception:\n"}
+,{"stream_name":"stderr","time":16.99935509,"data":"            time.sleep(5)\n"}
+,{"stream_name":"stderr","time":16.999359494,"data":"    raise TimeoutError(f'Timed out waiting for vLLM server at {url}.\\nLast server log lines:\\n{tail_server_log()}')\n"}
+,{"stream_name":"stderr","time":16.999364859,"data":"\n"}
+,{"stream_name":"stderr","time":16.999369569,"data":"\n"}
+,{"stream_name":"stderr","time":16.999373823,"data":"def start_vllm_server() -\u003e None:\n"}
+,{"stream_name":"stderr","time":16.99937852,"data":"    install_vllm_wheelhouse()\n"}
+,{"stream_name":"stderr","time":16.999382169,"data":"    VLLM_SERVER_LOG.parent.mkdir(parents=True, exist_ok=True)\n"}
+,{"stream_name":"stderr","time":16.999386468,"data":"    VLLM_SERVER_PID.unlink(missing_ok=True)\n"}
+,{"stream_name":"stderr","time":16.999390889,"data":"    log_handle = VLLM_SERVER_LOG.open('w', encoding='utf-8')\n"}
+,{"stream_name":"stderr","time":16.999395578,"data":"    cmd = [\n"}
+,{"stream_name":"stderr","time":16.999399787,"data":"        sys.executable,\n"}
+,{"stream_name":"stderr","time":16.99940392,"data":"        '-m',\n"}
+,{"stream_name":"stderr","time":16.999408068,"data":"        'vllm.entrypoints.openai.api_server',\n"}
+,{"stream_name":"stderr","time":16.999413345,"data":"        '--model',\n"}
+,{"stream_name":"stderr","time":16.999417873,"data":"        str(MODEL_PATH),\n"}
+,{"stream_name":"stderr","time":16.999422363,"data":"        '--served-model-name',\n"}
+,{"stream_name":"stderr","time":16.99942652,"data":"        SERVED_MODEL_NAME,\n"}
+,{"stream_name":"stderr","time":16.999431188,"data":"        '--host',\n"}
+,{"stream_name":"stderr","time":16.9994357,"data":"        VLLM_HOST,\n"}
+,{"stream_name":"stderr","time":16.999439964,"data":"        '--port',\n"}
+,{"stream_name":"stderr","time":16.999444361,"data":"        str(VLLM_PORT),\n"}
+,{"stream_name":"stderr","time":16.999448793,"data":"        '--tensor-parallel-size',\n"}
+,{"stream_name":"stderr","time":16.999452828,"data":"        str(VLLM_TENSOR_PARALLEL_SIZE),\n"}
+,{"stream_name":"stderr","time":16.999457063,"data":"        '--enable-auto-tool-choice',\n"}
+,{"stream_name":"stderr","time":16.999461141,"data":"        '--tool-call-parser',\n"}
+,{"stream_name":"stderr","time":16.999465444,"data":"        'qwen3_coder',\n"}
+,{"stream_name":"stderr","time":16.999469505,"data":"        '--generation-config',\n"}
+,{"stream_name":"stderr","time":16.99947378,"data":"        'vllm',\n"}
+,{"stream_name":"stderr","time":16.999479201,"data":"        '--enable-prefix-caching',\n"}
+,{"stream_name":"stderr","time":16.999483842,"data":"        '--default-chat-template-kwargs',\n"}
+,{"stream_name":"stderr","time":16.99948874,"data":"        '{\"preserve_thinking\": true}',\n"}
+,{"stream_name":"stderr","time":16.999493328,"data":"        '--reasoning-parser',\n"}
+,{"stream_name":"stderr","time":16.999497584,"data":"        'qwen3',\n"}
+,{"stream_name":"stderr","time":16.999506113,"data":"        '--max-model-len',\n"}
+,{"stream_name":"stderr","time":16.999511168,"data":"        str(VLLM_MAX_MODEL_LEN),\n"}
+,{"stream_name":"stderr","time":16.99951544,"data":"    ]\n"}
+,{"stream_name":"stderr","time":16.999519823,"data":"    print('Starting vLLM OpenAI server:', ' '.join(cmd), flush=True)\n"}
+,{"stream_name":"stderr","time":16.999524304,"data":"    process = subprocess.Popen(cmd, env=vllm_env(), stdout=log_handle, stderr=subprocess.STDOUT, text=True)\n"}
+,{"stream_name":"stderr","time":16.999528846,"data":"    VLLM_SERVER_PID.write_text(str(process.pid), encoding='utf-8')\n"}
+,{"stream_name":"stderr","time":16.999533437,"data":"    wait_for_vllm_server()\n"}
+,{"stream_name":"stderr","time":16.999537626,"data":"\n"}
+,{"stream_name":"stderr","time":16.999541698,"data":"\n"}
+,{"stream_name":"stderr","time":16.99954592,"data":"def run_vllm_api_smoke_test() -\u003e None:\n"}
+,{"stream_name":"stderr","time":16.999550603,"data":"    payload = {\n"}
+,{"stream_name":"stderr","time":16.99955518,"data":"        'model': SERVED_MODEL_NAME,\n"}
+,{"stream_name":"stderr","time":16.999559391,"data":"        'messages': [{'role': 'user', 'content': 'Answer in one short sentence: what is 2 + 2?'}],\n"}
+,{"stream_name":"stderr","time":16.99956391,"data":"        'temperature': 0.0,\n"}
+,{"stream_name":"stderr","time":16.999568525,"data":"        'max_tokens': 96,\n"}
+,{"stream_name":"stderr","time":16.99957278,"data":"        'chat_template_kwargs': {'enable_thinking': False},\n"}
+,{"stream_name":"stderr","time":16.999577511,"data":"    }\n"}
+,{"stream_name":"stderr","time":16.999581935,"data":"    response = request_json(f'{VLLM_BASE_URL}/chat/completions', payload=payload, timeout=120)\n"}
+,{"stream_name":"stderr","time":16.999586794,"data":"    generated = response['choices'][0]['message'].get('content', '').strip()\n"}
+,{"stream_name":"stderr","time":16.999591624,"data":"    print('\\n' + '=' * 88, flush=True)\n"}
+,{"stream_name":"stderr","time":16.999596194,"data":"    print('VLLM OPENAI SERVER QWEN SMOKE TEST REAL MODEL OUTPUT', flush=True)\n"}
+,{"stream_name":"stderr","time":16.999600788,"data":"    print('Generated:', generated, flush=True)\n"}
+,{"stream_name":"stderr","time":16.999605284,"data":"    print('=' * 88 + '\\n', flush=True)\n"}
+,{"stream_name":"stderr","time":16.999609754,"data":"\n"}
+,{"stream_name":"stderr","time":16.999614377,"data":"\n"}
+,{"stream_name":"stderr","time":16.999618857,"data":"print(f'vLLM wheelhouse path: {WHEELHOUSE}', flush=True)\n"}
+,{"stream_name":"stderr","time":16.99962368,"data":"print(f'Qwen model path: {MODEL_PATH}', flush=True)\n"}
+,{"stream_name":"stderr","time":16.99962863,"data":"assert_expected_cuda_gpu()\n"}
+,{"stream_name":"stderr","time":16.999633077,"data":"missing = [str(path) for path in (WHEELHOUSE, MODEL_PATH) if not path.exists()]\n"}
+,{"stream_name":"stderr","time":16.999638575,"data":"if missing:\n"}
+,{"stream_name":"stderr","time":16.999642726,"data":"    raise FileNotFoundError('Missing attached dataset path(s): ' + ', '.join(missing))\n"}
+,{"stream_name":"stderr","time":16.999647921,"data":"start_vllm_server()\n"}
+,{"stream_name":"stderr","time":16.999652348,"data":"run_vllm_api_smoke_test()\n"}
+,{"stream_name":"stderr","time":16.99965708,"data":"setup_env = {\n"}
+,{"stream_name":"stderr","time":16.999661673,"data":"    'USE_TF': '0',\n"}
+,{"stream_name":"stderr","time":16.999666031,"data":"    'TRANSFORMERS_NO_TF': '1',\n"}
+,{"stream_name":"stderr","time":16.99967047,"data":"    'TRANSFORMERS_NO_TORCHVISION': '1',\n"}
+,{"stream_name":"stderr","time":16.999678711,"data":"    'VLLM_NO_USAGE_STATS': '1',\n"}
+,{"stream_name":"stderr","time":16.999683214,"data":"    'PYTHONPATH': str(SITE_PACKAGES) + os.pathsep + os.environ.get('PYTHONPATH', ''),\n"}
+,{"stream_name":"stderr","time":16.999687860999998,"data":"    'LOCAL_ANALYZER_BASE_URL': VLLM_BASE_URL,\n"}
+,{"stream_name":"stderr","time":16.999692175,"data":"    'OPENAI_BASE_URL': VLLM_BASE_URL,\n"}
+,{"stream_name":"stderr","time":16.999696874,"data":"    'LOCAL_ANALYZER_PROVIDER': 'vllm',\n"}
+,{"stream_name":"stderr","time":16.999701524,"data":"    'OPENAI_PROVIDER': 'vllm',\n"}
+,{"stream_name":"stderr","time":16.999705977,"data":"    'LOCAL_ANALYZER_MODEL_ID': SERVED_MODEL_NAME,\n"}
+,{"stream_name":"stderr","time":16.999710337,"data":"    'INFERENCE_ANALYZER_MODEL': SERVED_MODEL_NAME,\n"}
+,{"stream_name":"stderr","time":16.999715521,"data":"    'LOCAL_ANALYZER_APP_NAME': 'ARC3 Agent Harness',\n"}
+,{"stream_name":"stderr","time":16.999720368,"data":"    'LOCAL_ANALYZER_CONTEXT_WINDOW': str(ANALYZER_CONTEXT_WINDOW),\n"}
+,{"stream_name":"stderr","time":16.999725014,"data":"    'LOCAL_ANALYZER_MAX_OUTPUT': '0',\n"}
+,{"stream_name":"stderr","time":16.999729717,"data":"    'LOCAL_ANALYZER_TOOL_STEPS': '0',\n"}
+,{"stream_name":"stderr","time":16.999734195,"data":"    'LOCAL_ANALYZER_TOOL_TIMEOUT': '30',\n"}
+,{"stream_name":"stderr","time":16.99973866,"data":"    'LOCAL_ANALYZER_TOOL_OUTPUT_TOKENS': '1024',\n"}
+,{"stream_name":"stderr","time":16.999743326,"data":"    'LOCAL_ANALYZER_YIELD_SECONDS': '60',\n"}
+,{"stream_name":"stderr","time":16.999747788,"data":"    'LOCAL_ANALYZER_TEMPERATURE': '0.6',\n"}
+,{"stream_name":"stderr","time":16.999752622,"data":"    'LOCAL_ANALYZER_TOP_P': '0.95',\n"}
+,{"stream_name":"stderr","time":16.999757569,"data":"    'LOCAL_ANALYZER_TOP_K': '20',\n"}
+,{"stream_name":"stderr","time":16.999761874,"data":"    'LOCAL_ANALYZER_ENABLE_THINKING': 'true',\n"}
+,{"stream_name":"stderr","time":16.999766542,"data":"    'MULTIMODAL_CONTEXT': 'current_grid',\n"}
+,{"stream_name":"stderr","time":16.999771574,"data":"    'MULTIMODAL_UPSCALE': '4',\n"}
+,{"stream_name":"stderr","time":16.999776072,"data":"}\n"}
+,{"stream_name":"stderr","time":16.999780711,"data":"setup_env_path = Path(os.environ['TAAF_KAGGLE_SETUP_ENV'])\n"}
+,{"stream_name":"stderr","time":16.999791572,"data":"existing_setup_env = {}\n"}
+,{"stream_name":"stderr","time":16.99979596,"data":"if setup_env_path.exists():\n"}
+,{"stream_name":"stderr","time":16.99980012,"data":"    existing_setup_env = json.loads(setup_env_path.read_text(encoding='utf-8'))\n"}
+,{"stream_name":"stderr","time":16.999805302,"data":"    if not isinstance(existing_setup_env, dict):\n"}
+,{"stream_name":"stderr","time":16.999810783,"data":"        raise RuntimeError('TAAF_KAGGLE_SETUP_ENV must contain a JSON object.')\n"}
+,{"stream_name":"stderr","time":16.999815413,"data":"existing_setup_env.update(setup_env)\n"}
+,{"stream_name":"stderr","time":16.999819981999998,"data":"setup_env_path.write_text(json.dumps(existing_setup_env, indent=2), encoding='utf-8')\n"}
+,{"stream_name":"stderr","time":16.999824819,"data":"\n"}
+,{"stream_name":"stderr","time":16.999829078,"data":"PYSETUP' returned non-zero exit status 1.\n"}
+,{"stream_name":"stderr","time":16.999833121,"data":"\n"}
+,{"stream_name":"stderr","time":19.91462362,"data":"/usr/local/lib/python3.12/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\\|'\n"}
+,{"stream_name":"stderr","time":19.914691225,"data":"  cells[i][c] = re.sub('\\\\\\\\\\|', '|', cell)\n"}
+,{"stream_name":"stderr","time":20.118055562,"data":"/usr/local/lib/python3.12/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\\_'\n"}
+,{"stream_name":"stderr","time":20.118098006,"data":"  text = re.sub(r'_', '\\_', text) # Escape underscores in display text\n"}
+,{"stream_name":"stderr","time":21.018137238,"data":"[NbConvertApp] Converting notebook __notebook__.ipynb to notebook\n"}
+,{"stream_name":"stderr","time":21.469658071,"data":"[NbConvertApp] Writing 72972 bytes to __notebook__.ipynb\n"}
+,{"stream_name":"stderr","time":24.792659063,"data":"[NbConvertApp] Converting notebook __notebook__.ipynb to html\n"}
+,{"stream_name":"stderr","time":25.952870709,"data":"[NbConvertApp] Writing 368135 bytes to __results__.html\n"}
+]

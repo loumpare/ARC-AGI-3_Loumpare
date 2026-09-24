@@ -1,0 +1,56 @@
+{
+  "game_id": "bp35-0a0ad940",
+  "agent_name": "duck-harness",
+  "status": "gave_up",
+  "pass_index": 0,
+  "pass_label": "0",
+  "eventCount": 63,
+  "lastEvent": {
+    "score": 0,
+    "state": "NOT_FINISHED",
+    "level": 1,
+    "run_status": "playing",
+    "type": "action",
+    "title": "Action 28",
+    "action_num": 28,
+    "analysis_step": 10,
+    "action_name": "ACTION3",
+    "action_display": "LEFT",
+    "reward": 0.0,
+    "board_changed": true,
+    "done": false,
+    "level_completed": false,
+    "game_over": false,
+    "run_complete": false,
+    "batch_index": 1,
+    "batch_size": 1,
+    "animation": {
+      "frames": 43,
+      "unique_frames": 39,
+      "board_unchanged": false,
+      "transient_pixels": 2765,
+      "transient_bbox": [
+        0,
+        1,
+        62,
+        62
+      ]
+    }
+  },
+  "viewer_steps": [],
+  "replay_url": "solver_analysis/bp35-0a0ad940_p0.html",
+  "levels_completed": 0,
+  "total_levels": 9,
+  "actions_per_level": [
+    28,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "final_score": 0.0
+}

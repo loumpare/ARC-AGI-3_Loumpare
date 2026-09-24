@@ -1,0 +1,53 @@
+{
+  "game_id": "sc25-635fd71a",
+  "agent_name": "duck-harness",
+  "status": "gave_up",
+  "pass_index": 0,
+  "pass_label": "0",
+  "eventCount": 120,
+  "lastEvent": {
+    "score": 1,
+    "state": "NOT_FINISHED",
+    "level": 2,
+    "run_status": "playing",
+    "type": "action",
+    "title": "Action 80",
+    "action_num": 80,
+    "analysis_step": 21,
+    "action_name": "ACTION3",
+    "action_display": "LEFT",
+    "reward": 0.16666666666666666,
+    "board_changed": true,
+    "done": false,
+    "level_completed": true,
+    "game_over": false,
+    "run_complete": false,
+    "batch_index": 1,
+    "batch_size": 1,
+    "animation": {
+      "frames": 5,
+      "unique_frames": 4,
+      "board_unchanged": false,
+      "transient_pixels": 402,
+      "transient_bbox": [
+        0,
+        12,
+        58,
+        63
+      ]
+    }
+  },
+  "viewer_steps": [],
+  "replay_url": "solver_analysis/sc25-635fd71a_p0.html",
+  "levels_completed": 1,
+  "total_levels": 6,
+  "actions_per_level": [
+    80,
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "final_score": 0.9642857142857143
+}

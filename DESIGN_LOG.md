@@ -2242,3 +2242,468 @@ now well-understood and mostly reusable (GPU check, thread-isolated
 asyncio runner, competition_sources+no-internet+pre-staged-dataset
 pattern), so a future attempt should be much faster, but today's actual
 Stage 1 data point is still zero.
+
+### Stage 1, v4: the genuinely multimodal retry (`Qwen3-VL-8B-Instruct-FP8`) -- still zero, new cause
+
+Sourced `Qwen/Qwen3-VL-8B-Instruct-FP8` (official, `image-text-to-text`,
+FP8, 10.6GB) -- unlike plain `Qwen3-8B-FP8`, this is natively
+multimodal, closing the exact gap identified above. Pre-downloaded
+locally, re-uploaded as a new private Kaggle dataset
+(`loumitrmas/qwen3-vl-8b-instruct-fp8`), pushed as version 4 of the same
+kernel (`loumitrmas/ablation-model-size-v3`), condition renamed
+`E_8B_VL_FP8_vLLM_RTXPro6000`.
+
+Run took ~65 minutes wall-clock (`lastRunTime` to `COMPLETE`). Verified
+this was genuinely v4's own fresh output, not cached v3 data, by
+grepping the pulled log for the new condition label (24 hits for
+`E_8B_VL_FP8_vLLM_RTXPro6000`, 0 hits for the old `D1_...` label) --
+learned the hard way earlier today that Kaggle's web UI can show a stale
+prior-version log by default while the CLI's `kernels status` correctly
+reports `RUNNING`, so this check was made a hard requirement before
+trusting any log content this time.
+
+**Result: GPU check passed (real RTX Pro 6000), vLLM server started
+cleanly and reported "server ready" at t=268s, but then every single
+analyzer HTTP call across all 4 games timed out after 180s** (`analyzer
+request failed at action 1: HTTPConnectionPool(host='127.0.0.1',
+port=1234): Read timed out`), retried continuously until each game's
+full ~900s budget was exhausted, ending `state=gave_up`, 0 actions, on
+all 4 witness games (`ls20`, `cd82`, `tr87`, `re86`). `error: null` in
+every `RESULT` line -- this is NOT the same failure as v3 (no 400
+"not a multimodal model" rejection this time, confirming the fix for
+that specific bug worked), but a new, different blocker: the server
+accepted the connection and reported healthy, yet never produced a
+single completion within 180s, for the entire run, on every game.
+
+Root cause not yet identified -- the vLLM subprocess's own stdout/stderr
+was not piped into the notebook's captured log (only the wrapper's
+`print()` calls were), so there's no visibility into what the server was
+doing during those 180s windows (stuck decoding, image-token blowup from
+`MULTIMODAL_UPSCALE=4` on a smaller model's shorter native context,
+parser mismatch between `qwen3_coder`/`qwen3` flags and the VL variant,
+etc. are all plausible but unverified hypotheses -- not asserted as fact
+per project convention).
+
+**Honest status**: Stage 1 has now failed at three independent
+checkpoints in sequence (400 multimodal-mismatch -> fixed; new 180s
+serving hang -> unresolved), each real and distinct, each costing a full
+Kaggle GPU-hour-class run. Not relaunching a fourth attempt without
+explicit user direction, per standing project rule against unprompted
+quota-consuming reruns. The model-size question (8B vs 27B) remains
+**open** -- this is an infrastructure/serving finding, not a capability
+finding.
+
+### Stage 1, v5/v6: diagnostic probes isolate the 180s hang to the real payload
+
+User chose "investigate the hang" over abandoning Stage 1. Added two raw,
+harness-bypassing probes (`probe_completion()`) called right after
+`start_vllm_server()` -- one text-only, one with a trivial 1x1 PNG -- plus
+`print_vllm_log_tail()` so the vLLM subprocess's own stdout/stderr is
+printed straight into the notebook's captured log (avoids depending on
+`kaggle kernels output`, which hit a long 429 rate limit this session
+after an earlier accidental full-tree download of the ~10GB
+`vllm-site-packages` folder). Restricted the harness run itself to a
+single witness game (`ls20`) to cut GPU cost while diagnosing.
+
+**v5 failed immediately (t=4s)**: `ValueError: No kernel name found in
+notebook and no override provided` -- a bug in this session's own
+notebook-regeneration script, which omitted the `kernelspec` metadata
+block that papermill needs. Fixed by adding
+`nb['metadata']['kernelspec']`, validated locally with `nbformat.validate`
+before repushing. Cost: 8 seconds of GPU time, not a real setback.
+
+**v6 (fixed) ran clean and gave a genuinely new, well-isolated result**:
+- Both probes succeeded: text-only in 23.3s (cold start: model load +
+  torch.compile), with-image in 0.1s (warm). **This proves the server and
+  inference pipeline are healthy and responsive** -- not a systemic hang.
+- The real harness run against `ls20` then failed exactly as before:
+  `analyzer request failed ... Read timed out (read timeout=180.0)`,
+  repeated ~5 times across the 902.6s budget, `state=gave_up`, 0 actions.
+
+**Conclusion: the 180s hang is not server-level, it's specific to the
+harness's real analyzer payload** (the full upscaled game-grid image via
+`MULTIMODAL_CONTEXT=current_grid`+`MULTIMODAL_UPSCALE=4`, combined with
+the real tool schema and a much larger `max_tokens`/thinking budget than
+the trivial probes used). Two live hypotheses, not yet distinguished:
+(a) a genuine capability signal -- an 8B reasoning model may fail to
+converge to a well-formed tool call within a practical token/time budget
+under this much harder payload, which the 27B anchor handles fine
+(13/25 games); or (b) a narrower serving-side issue specific to
+image+tool-calling on this particular VL architecture/parser combo. Not
+yet worth spending more Kaggle GPU-hours to fully bisect without further
+direction -- the finding as it stands is real and reportable: **this is
+no longer an unexplained infra failure, it is now narrowed to the
+model's behavior under the harness's actual payload.**
+
+### Stage 1: local reproduction breaks the tie -- almost certainly a serving bug, not a capability limit
+
+User pushed back correctly on the framing: Stage 1's actual goal (does a
+bigger multimodal model give a net gain at matched precision?) was still
+unanswered, because the 8B never got a fair shot -- every Kaggle attempt
+failed before producing a single valid game action. User asked to debug
+locally first, cheaply, before spending more Kaggle GPU-hours.
+
+Local hardware check: `Qwen3-VL-8B-Instruct-FP8` is 10.6GB on disk
+(already cached from the earlier Kaggle-dataset upload), but the RTX 3090
+(Ampere, compute capability 8.6) can't run true FP8 -- confirmed again
+here, `transformers` itself printed the same constraint vLLM enforces
+("FP8 quantized models is only supported on GPUs with compute capability
+>= 8.9 ... actual = 8.6"). Difference: **`transformers` degrades
+gracefully by dequantizing to bf16 on load** (17.5GB VRAM, fits fine on
+24GB), whereas vLLM hard-refuses non-supporting hardware outright -- this
+is why the local debug had to go through `transformers` directly rather
+than vLLM.
+
+Read the real harness payload shape straight from the vendored source
+(`inference/agent/tool_agent.py`, `vision_context.py`) rather than
+guessing it: exactly one `python` function tool, `thinking=True` by
+default (`_LOCAL_ANALYZER_ENABLE_THINKING`), **`max_tokens` UNBOUNDED by
+default** (`_LOCAL_ANALYZER_MAX_OUTPUT` env defaults to 0 -> `None`),
+temperature=0.6/top_p=0.95/top_k=20, and the game grid sent as a PNG
+upscaled x4 with NEAREST resampling. Built a local script
+(`local_debug_vl8b.py`) reproducing this exact request shape (system
+prompt + synthetic 64x64 grid image + the same tool schema) via
+`processor.apply_chat_template(..., tools=[...])` and
+`model.generate(..., streamer=...)` to watch token-by-token output live.
+
+**Result: the model produced a complete, correctly-formatted tool call in
+3.9 seconds** (318 prompt tokens, well-formed `<tool_call>{"name":
+"python", "arguments": {"code": "current_frame.segmentation.objects"}}
+</tool_call><|im_end|>`, and stopped cleanly -- no rambling, no
+non-terminating "thinking" loop. This directly contradicts the "genuine
+8B capability/convergence limit" hypothesis: the exact same model,
+handling the exact same kind of request (image + tool schema + thinking
+enabled), converges almost instantly when NOT going through the Kaggle
+vLLM stack.
+
+**New leading hypothesis: this is a Kaggle-specific vLLM serving/parser
+bug, not a model capability issue.** Most likely suspect: the
+`--tool-call-parser qwen3_coder` + `--reasoning-parser qwen3` flag
+combination (copied verbatim from the real production config, which was
+tuned for the text-only 27B model) may not handle
+`Qwen3VLForConditionalGeneration`'s multimodal token stream correctly,
+possibly hanging inside the parser rather than in generation itself. Not
+yet confirmed -- would need either a Kaggle run with the tool/reasoning
+parsers disabled (plain completion, parse tool calls manually) or with
+different parser flags, to isolate further. This is now a concrete,
+actionable next Kaggle experiment rather than an open-ended mystery.
+
+### Stage 1, v7: parser-isolation probe -- a third, distinct behavior, still not resolved
+
+Pushed v7 to test the leading hypothesis directly: faithful real-payload
+probe (real 256x256 upscaled grid image, real `python` tool schema,
+thinking enabled, unbounded max_tokens -- exact same shape the local
+`transformers` test used) sent through vLLM, once WITH the production
+`--tool-call-parser qwen3_coder --reasoning-parser qwen3` flags, once
+WITHOUT them.
+
+**WITH parsers: succeeded in 23.6s (not a timeout) but returned an EMPTY
+response** -- `content=None`, `tool_calls=[]`. Neither a hang nor a valid
+answer. Likely explanation (not yet confirmed): the parser strips
+generated text into a `reasoning_content` field that the probe didn't
+capture/print, and never emits a structured tool call the parser
+recognizes -- but this is a hypothesis, not verified.
+
+**WITHOUT parsers: failed immediately (0.0s) with `HTTPError 400: Bad
+Request`** -- never got to test this path for real. Root cause not yet
+confirmed, but the likely explanation is that vLLM rejects a request
+containing a `tools` field when `--enable-auto-tool-choice` isn't active.
+
+Kernel ended in `ERROR` (not `COMPLETE`) due to an unrelated bug in this
+diagnostic script itself -- the harness's full game run was intentionally
+skipped in v7, so `ablation_results.json` was never created, and the
+final `print(RESULTS_PATH.read_text())` crashed on a `FileNotFoundError`.
+Benign: both probe results were already printed and captured before the
+crash, no data lost.
+
+**Honest status**: this is now a *third* distinct observed behavior,
+different from both the harness's real symptom (180s timeout, zero
+response) and the local `transformers` result (fast, correct tool call).
+Neither confirms nor cleanly refutes the parser hypothesis -- it shows
+the parser-enabled path does something wrong (swallows the response) but
+not the SAME wrong thing the harness experiences (a hang). The
+without-parsers comparison, which would have been the cleanest test,
+never actually ran. Stage 1 remains unresolved after 7 real Kaggle runs.
+Not relaunching further without explicit user direction -- diminishing
+returns per additional run, and each costs real GPU-hour-class quota.
+
+### Stage 1, v8: definitive confirmation -- vLLM's qwen3_coder/qwen3 parsers are broken for Qwen3VL
+
+Fixed two loose ends from v7: `request_json` now surfaces the actual
+HTTPError response body (was a bare "Bad Request" before); the
+without-parsers probe now omits the `tools` API field entirely (v7's 400
+was `tools` being rejected without `--enable-auto-tool-choice`) while
+still describing the tool as plain text in the system prompt, so vLLM
+accepts the request; `reasoning_content` is now printed too.
+
+**Result -- clean, reproducible, and definitive:**
+- **WITH `--tool-call-parser qwen3_coder --reasoning-parser qwen3`**:
+  `finish_reason='stop'`, but `content=None`, `reasoning_content=None`,
+  `tool_calls=[]` -- a **completely empty response** in 23.6s. The
+  request "succeeds" from vLLM's point of view but produces nothing at
+  all, in any field.
+- **WITHOUT those parser flags**: **correct tool call in 0.7s** --
+  `content='<tool_call>{"name": "python", "arguments": {"code": "print(current_frame.segmentation.objects)"}}\n</tool_call>'`.
+  Matches the local `transformers` result almost exactly (3.9s there,
+  0.7s here -- vLLM is simply faster).
+
+**Root cause confirmed: `--tool-call-parser qwen3_coder` +
+`--reasoning-parser qwen3` (copied from the real production config,
+tuned for the text-only 27B model) are incompatible with
+`Qwen3VLForConditionalGeneration` and silently swallow the model's
+entire output.** This is not a model capability issue and not a general
+serving hang -- it's a specific, fixable parser misconfiguration. Turning
+the parsers off makes the 8B model respond correctly and fast.
+
+**What this doesn't yet explain**: the harness's real symptom was a 180s
+*timeout* (`Read timed out`), not a fast-but-empty response like this
+isolated probe got twice now (v7 and v8). Both point at the same broken
+parser, but the failure mode differs (empty vs hang) -- plausibly the
+parser bug is non-deterministic depending on the model's exact generated
+text, sometimes returning empty fast, sometimes getting stuck. Not fully
+resolved, but the fix is the same either way: don't use those parser
+flags with this model.
+
+**Concrete next step (not yet done)**: patch the vendored Duck Harness's
+tool-call extraction (`tool_agent.py`, same file/pattern as the earlier
+Ollama `content: null` fix) to parse `<tool_call>{...}</tool_call>` from
+raw `content` when running without vLLM's structured parser, matching
+what the model actually emits. This would finally unblock a real,
+game-score Stage 1 comparison (8B vs 27B, matched precision/hardware) --
+currently blocked on this code change, not on infrastructure.
+
+### Stage 1, v9: hermes parser ruled out too -- the culprit is --enable-auto-tool-choice itself
+
+Cleaned up the script before this push (removed dead code: unused
+`probe_completion`, unused Ollama helpers left over from the dropped
+Stage 4; `probe_faithful` now returns a real bool so `main()` can
+actually gate the full 4-game run on whether the probe succeeded,
+replacing a leftover no-op "ping" check from v8's draft). Tested vLLM's
+built-in `hermes` tool-call parser (designed for the exact
+`<tool_call>{json}</tool_call>` markup this model emits) instead of
+`qwen3_coder`, keeping `--enable-auto-tool-choice` and
+`--reasoning-parser qwen3`.
+
+**Result: identical failure to qwen3_coder** -- `content=None`,
+`reasoning_content=None`, `tool_calls=[]`, 23.4s, `probe_ok=False`. The
+script correctly detected this and skipped the full 4-game run to save
+quota (~9 min total for this push).
+
+**This rules out "wrong parser name" as the cause.** Two different
+parsers, same `--enable-auto-tool-choice` flag, same empty-response
+symptom. Combined with v8's finding (dropping `--enable-auto-tool-choice`
++ `tools` entirely gave a correct tool call in 0.7s), the real dividing
+line is `--enable-auto-tool-choice` itself (vLLM's structured/guided
+tool-call decoding path) breaking on `Qwen3VLForConditionalGeneration` in
+this vLLM version (0.19.0) -- not which parser interprets the output.
+
+**Confirmed necessary next step**: patch the vendored harness
+(`tool_agent.py`) to not send `tools`/`tool_choice` in the API request at
+all for this model, relying entirely on the tool description in the
+system prompt plus the harness's own already-existing
+`_recover_tool_calls_from_markup()` fallback to parse `<tool_call>` tags
+from plain `content` -- exactly the shape that worked in v8's
+"without_parsers" probe. This is a real code change, not a launch-flag
+tweak; not yet done.
+
+### Stage 1: harness patch implemented and validated locally (no GPU/Kaggle needed)
+
+Patched the vendored Duck Harness (`ARC3-Inference/inference/agent/
+tool_agent.py` + `prompts.py`) to fix the confirmed `--enable-auto-tool-choice`
+incompatibility (v8/v9), following the exact pattern already used for the
+earlier Ollama `content: null` fix -- patch the vendored clone, never the
+upstream repo:
+
+1. New env var `LOCAL_ANALYZER_NATIVE_TOOL_CALLING` (default `true`,
+   preserves existing behavior everywhere else). When `false`,
+   `ToolAgent._tools()` returns `[]` -- this also makes
+   `_request_tool_choice([])` return `None`, so the API request omits
+   both `tools` and `tool_choice` entirely, avoiding vLLM's broken
+   structured/guided decoding path.
+2. New `TOOL_CALL_MARKUP_EXAMPLE_ADDENDUM` (prompts.py), appended to the
+   system prompt only when native tool calling is disabled -- spells out
+   the literal `<tool_call>{"name": ..., "arguments": {...}}</tool_call>`
+   format explicitly, since without a `tools` field the model's chat
+   template no longer auto-renders a format example the way
+   `TOOL_CALL_FORMAT_GUIDANCE`'s "format shown elsewhere in this prompt"
+   assumes.
+3. **A second, independently real bug found while implementing this**:
+   `_TOOL_CALL_BLOCK_RE` (the harness's existing raw-markup-recovery
+   fallback, already in the code before today) only matches an
+   XML-attribute style (`<tool_call><function=NAME><parameter=k>v
+   </parameter></function></tool_call>`) -- NOT the JSON-style
+   `<tool_call>{"name": ..., "arguments": {...}}</tool_call>` that
+   Qwen3-family models (confirmed: `Qwen3VLForConditionalGeneration`)
+   actually emit. Without also fixing this, my patch above would have
+   suppressed the broken API path but then failed to recover the tool
+   call from the correctly-emitted raw text either -- a second,
+   independent point of failure that only surfaced by reading the regex
+   carefully, not by reasoning about the fix abstractly. Added
+   `_TOOL_CALL_JSON_BLOCK_RE` and a JSON-parsing branch in
+   `_recover_tool_calls_from_markup()`/`_strip_tool_call_markup()`
+   alongside the original XML-style path (both now supported, mutually
+   exclusive by construction).
+
+**Validated locally, no GPU/Kaggle needed** (`test_tool_agent_patch.py`,
+plus direct `ToolAgent` instantiation checks -- `__init__`/`_tools()`/
+`_build_system_prompt()` do no I/O, confirmed safe to call standalone):
+- `_tools()` returns `[]` with the flag set, unchanged (still returns the
+  python tool) without it -- no regression.
+- System prompt includes the explicit format example only when disabled
+  -- no regression on the default prompt.
+- `_recover_tool_calls_from_markup()` correctly parses the REAL raw text
+  captured from Kaggle (v8's without-parsers probe, verbatim):
+  `'<tool_call>\n{"name": "python", "arguments": {"code":
+  "print(current_frame.segmentation.objects)"}}\n</tool_call>'` -> tool
+  name, arguments, and code all recovered correctly.
+- The original XML-attribute-style format still recovers correctly too
+  (no regression on the pre-existing fallback path).
+- `_strip_tool_call_markup()` cleanly removes both formats.
+
+All 10 checks pass. **Not yet tested against a live server or the real
+game engine** -- this validates the harness's own code paths in
+isolation with real captured data, not an end-to-end run. Next step (not
+yet done, pending explicit go-ahead): push a v10 Kaggle kernel with
+`LOCAL_ANALYZER_NATIVE_TOOL_CALLING=false` set, first as a cheap probe
+(single analyzer turn) before committing to the full 4-game budget.
+
+### Stage 1, v10: monkeypatch mechanism, a 3rd bug caught locally, and launch
+
+Realized the direct source edits to the vendored clone have ZERO effect
+on Kaggle -- the kernel pulls the harness fresh from the public
+`jeroencottaar/taaf-kaggle-source-share` dataset (unpatched), not from
+`/tmp/.../scratchpad/vendor/duck-harness`. Rather than create a new
+Kaggle dataset just to ship two patched files (extra friction, another
+safety-classifier-gated action), implemented the fix as a runtime
+monkeypatch (`_apply_tool_agent_patch()` in `ablation_run.py`, called
+right after `HarnessSolver` is imported inside
+`run_duck_harness_condition()`): reassigns
+`inference.agent.tool_agent._recover_tool_calls_from_markup`,
+`_strip_tool_call_markup`, `_build_system_prompt`, and
+`ToolAgent._tools` in place on the already-imported module/class.
+
+**Validated the monkeypatch mechanism itself locally** (not just the
+logic, already validated earlier) -- extracted a PRISTINE, unpatched
+copy of the harness via `git archive HEAD` on the vendored clone (i.e.
+exactly what Kaggle's dataset provides), imported it fresh, confirmed the
+ORIGINAL bug reproduces first (`_recover_tool_calls_from_markup` fails on
+the real JSON-style markup, as expected), then applied the exact
+monkeypatch code (copy-pasted verbatim from `ablation_run.py`, not a
+paraphrase) and re-ran the same checks.
+
+**Caught a third real, would-have-crashed-the-Kaggle-run bug this way**:
+the monkeypatch's replacement `_tools()`/`_build_system_prompt()`
+reference `_ta._LOCAL_ANALYZER_NATIVE_TOOL_CALLING`, but that constant
+only exists in my direct-edit vendored copy -- the pristine module has no
+such attribute at all, so the very first `ToolAgent()` instantiation
+would have raised `AttributeError: module 'inference.agent.tool_agent'
+has no attribute '_LOCAL_ANALYZER_NATIVE_TOOL_CALLING'` immediately.
+Fixed by having `_apply_tool_agent_patch()` explicitly set this attribute
+on the module itself (read from the env var) rather than assuming it
+already exists. Re-ran all checks: 8/8 pass against the pristine copy.
+
+Also updated the Kaggle-side vLLM launch config to match: no
+`--tool-call-parser`/`--enable-auto-tool-choice` at all this time (v7/v9
+already proved which parser doesn't matter -- the flag itself is the
+problem), `--reasoning-parser qwen3` kept (never implicated).
+`set_analyzer_env()` now sets `LOCAL_ANALYZER_NATIVE_TOOL_CALLING=false`
+before any harness import happens (module-level constants in the harness
+are read once at import time). Probe changed to `send_tools=False` to
+match what the patched harness will actually send.
+
+**Pushed as v10.** Condition renamed `E_8B_VL_FP8_vLLM_RTXPro6000_patched`.
+Same quota discipline as before: probe first (~120s budget), only spend
+the full 4-game/60-action/15-min-per-game run if the probe confirms a
+usable tool call. Launched at user's explicit "vasy lance" after three
+rounds of local-only validation (function-level, monkeypatch-mechanism,
+and this final pre-push compile+notebook-validate pass) -- this is the
+first Stage 1 attempt where every layer of the fix was verified against
+real captured data or a pristine module copy before spending any Kaggle
+GPU-hours on it.
+
+## 2026-09-10 (later) — Scoping a real competition submission using Duck Harness
+
+While v10 (Stage 1 harness-patch attempt) ran on Kaggle, user asked whether
+we could submit today using the real Duck Harness code that scored 13/25
+offline. Investigated the actual requirements first rather than assuming.
+
+**Answer: not directly submittable as-is.** Per
+[[kaggle_submission_pipeline]] memory, the real competition mechanism
+requires a `MyAgent(Agent)` class (`data/ARC-AGI-3-Agents/agents/agent.py`'s
+ABC, `is_done`/`choose_action`) driven by the official
+`ARC-AGI-3-Kaggle-Starter` framework's own `Agent.main()` loop against a
+gateway sidecar -- fundamentally different from the offline `taaf.benchmark
+.Benchmark`/`HarnessSolver` API our exploratory/ablation kernels have used
+all along (which drives its own environment directly, bypassing the
+competition's actual scoring path entirely).
+
+**Core architectural incompatibility, found by reading the real code (not
+assumed)**: `Agent.main()` (the competition's driving loop) calls
+`choose_action(frames, latest_frame) -> GameAction` ONCE per action --
+strictly one decision, one action, repeat. Duck Harness's actual unit of
+work is `ToolAgent.analyze(state_path, action_num, valid_actions,
+step_env: Callable, ...)` -- ONE call per "turn," but internally the
+sandboxed Python code can call `action(...)` an arbitrary number of times
+per turn (see `PYTHON_ADDENDUM`: "You can also call `action(...)`
+multiple times in one Python snippet, including inside loops"), each
+invocation synchronously calling the injected `step_env` callback and
+using its real response to decide whether to act again. **Two loops, each
+assuming it owns stepping the real environment.**
+
+**Proposed design (not yet implemented)**: run `ToolAgent.analyze()` in a
+background thread per turn. Its `step_env` callback, instead of stepping
+a real environment, pushes the requested action(s) onto a queue and
+blocks (via a `threading.Event` or `queue.Queue`) waiting for the result.
+The adapter's `choose_action()` (called by the REAL competition loop, on
+the main thread): first call of a turn starts the background `analyze()`
+thread; pops the next queued action and returns it as this call's
+`GameAction` (letting `Agent.main()` execute it for real via
+`self.take_action()`); subsequent calls feed the resulting real
+`FrameData` back into the blocked background thread (unblocking
+`step_env`) and wait for either the next requested action or the turn's
+natural completion (no more `step_env` calls -- start the next
+`analyze()` turn). Same thread+blocking-queue control-flow-inversion
+pattern already used for `_run_coro_isolated` (the notebook-asyncio fix
+from Stage 1), just applied to actions instead of coroutines.
+
+**Not yet built.** Real open risks, not yet resolved: (1) whether the
+actual gateway-based submission environment permits spinning up a local
+vLLM server the same way our exploratory kernels do (untested -- the
+graded rerun's constraints are not fully known); (2) thread-safety and
+potential deadlock risk in the queue-based handoff, not yet tested even
+locally; (3) `MAX_ACTIONS` budget interplay between the competition's own
+per-game action cap and Duck Harness's own `max_actions_per_game`/
+`analyzer_timeout` settings. Scoped as a real, separate engineering task,
+not attempted for today's submission -- user confirmed no urgency
+("pas forcément pour aujourd'hui").
+
+### Stage 1, v10: harness patch applied correctly but STILL fails -- hypothesis correction
+
+The monkeypatch mechanism worked exactly as validated (confirmed via
+`[decision] probe_ok=False` -- the gate correctly prevented the full
+4-game run from spending quota). But the probe itself still failed
+identically: `finish_reason='stop'`, `content=None`,
+`reasoning_content=None`, `tool_calls=[]`, 23.5s. vLLM's own log confirms
+the launch args this time were genuinely clean: `{'reasoning_parser':
+'qwen3', 'enable_prefix_caching': True, ...}` -- no `tool_call_parser`,
+no `enable_auto_tool_choice` at all.
+
+**This falsifies the `--enable-auto-tool-choice` hypothesis from v7-v9.**
+Comparing configs precisely: v8's WORKING run (0.7s, correct tool call)
+had `enable_parsers=False`, which at that point in the script removed
+ALL THREE of `--enable-auto-tool-choice`, `--tool-call-parser`, AND
+`--reasoning-parser` together as one bundle. v10 only removed the first
+two, deliberately keeping `--reasoning-parser qwen3` (reasoning stated at
+the time: "never actually implicated -- v8's working response didn't
+even use a `<think>` block"). That reasoning was wrong -- v8's success
+was never a clean test of `--reasoning-parser` in isolation, because it
+was always bundled with the other two flags in the code at that point.
+**`--reasoning-parser qwen3` itself is the more likely real culprit**,
+independently sufficient to produce the empty-response bug, regardless
+of tool-call-parser/auto-tool-choice state.
+
+Not yet re-tested with reasoning-parser also removed (would be v11) --
+holding here to report this correction honestly rather than assume the
+next attempt will work. 10 real Kaggle runs on Stage 1 so far; this is
+the first time reasoning-parser has been isolated as a distinct variable
+from tool-call-parser.
