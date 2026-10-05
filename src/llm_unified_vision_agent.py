@@ -18,8 +18,8 @@ mouvement -- vient sans modification de la classe parente. Si tu cherches un
 bug de déplacement/boucle sur cet agent, va voir :
   - `VisionToolsAgent._choose_action_impl` dans src/llm_tools_vision_agent.py
   - `_bfs_path` / `_update_from_last_transition` dans src/llm_tools_agent.py
-Ce fichier était dans un scratchpad temporaire (session Claude) -- copié ici
-le 2026-09-05 pour que ce soit consultable/versionnable dans le repo."""
+Ce fichier était dans un scratchpad temporaire -- copié ici le 2026-09-05
+pour que ce soit consultable/versionnable dans le repo."""
 import queue
 import threading
 

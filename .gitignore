@@ -13,3 +13,25 @@ results/
 notebooks/qwen_gguf_model/
 notebooks/qwen_tools_dataset/
 .venv-vllm-DONOTCOMMIT/
+vendor/
+
+# Generated run outputs / local artifacts (never commit)
+/artifacts/
+/movies/
+/prompts/
+/solver_analysis/
+/transcripts/
+/taaf_harness_artifacts/
+/.cache/
+*.pkl
+/benchmark.json
+/diagnostics.html
+/summary.txt
+/stdout.log
+/git_status.txt
+/taaf_setup_env.json
+/submission.parquet
+*.log
+*.RESULT
+notebooks/temp_first_frame.png
+*_executed.ipynb
